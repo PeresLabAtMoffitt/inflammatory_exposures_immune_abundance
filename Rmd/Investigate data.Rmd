@@ -367,39 +367,39 @@ markers_ROI <- markers_ROI %>%
 ```
 
 ```{r clustering}
-set.seed(1234)
-### Cluster for stroma/tumor in the intratumoral/peritumoral ROIs
-clust_markers <- markers_ROI %>%
-  filter(!is.na(markers_ROI$percent_CD3_CD8_tumor.i) & !is.na(markers_ROI$percent_CD3_CD8_tumor.p)) %>%
-  select(suid, c("percent_CD3_tumor.i", "percent_CD3_CD8_tumor.i", "percent_CD3_FoxP3_tumor.i", "percent_CD11b_tumor.i", "percent_CD11b_CD15_tumor.i",
-                 "percent_CD3_stroma.i", "percent_CD3_CD8_stroma.i", "percent_CD3_FoxP3_stroma.i", "percent_CD11b_stroma.i", "percent_CD11b_CD15_stroma.i",
-                 "percent_CD3_tumor.p", "percent_CD3_CD8_tumor.p", "percent_CD3_FoxP3_tumor.p", "percent_CD11b_tumor.p", "percent_CD11b_CD15_tumor.p",
-                 "percent_CD3_stroma.p", "percent_CD3_CD8_stroma.p", "percent_CD3_FoxP3_stroma.p", "percent_CD11b_stroma.p", "percent_CD11b_CD15_stroma.p"
-                 ))
-clust <- Mclust(scale(clust_markers[,c(2:ncol(clust_markers))]))
-# summary(clust)
-clust_markers$clusters_all_IandP <- clust$classification
-clust_markers$clusters_all_IandP <- factor(clust_markers$clusters_all_IandP,
-                                           levels = c(1, 2, 3, 4, 5),
-                                           labels = c("mid", "high", "mid-high", "mid-low", "low"))
-clust_markers <- clust_markers %>%
-  mutate(clusters_all_IandP = factor(clusters_all_IandP,
-                                     levels = c("low", "mid-low", "mid", "mid-high", "high")))
-# clust_markers %>%
-# tidyr::gather(key = "markers_cat", value = "value",
-#               c("percent_CD3_tumor.i":"percent_CD11b_CD15_stroma.i")) %>%
-#   select(suid, clusters_all_IandP, markers_cat, value) %>%
-#   ggplot(aes(x=suid, y=value, group=markers_cat,  color=markers_cat))+
-#   geom_boxplot()+
-#   facet_grid(.~ clusters_all_IandP)
-# clust_markers %>%
-# tidyr::gather(key = "markers_cat", value = "value",
-#               c("percent_CD3_tumor.p":"percent_CD11b_CD15_stroma.p")) %>%
-#   select(suid, clusters_all_IandP, markers_cat, value) %>%
-#   ggplot(aes(x=suid, y=value, group=markers_cat,  color=markers_cat))+
-#   geom_boxplot()+
-#   facet_grid(.~ clusters_all_IandP)
-markers_ROI <- full_join(markers_ROI, clust_markers %>% select(suid, clusters_all_IandP), by = "suid")
+# set.seed(1234)
+# ### Cluster for stroma/tumor in the intratumoral/peritumoral ROIs
+# clust_markers <- markers_ROI %>%
+#   filter(!is.na(markers_ROI$percent_CD3_CD8_tumor.i) & !is.na(markers_ROI$percent_CD3_CD8_tumor.p)) %>%
+#   select(suid, c("percent_CD3_tumor.i", "percent_CD3_CD8_tumor.i", "percent_CD3_FoxP3_tumor.i", "percent_CD11b_tumor.i", "percent_CD11b_CD15_tumor.i",
+#                  "percent_CD3_stroma.i", "percent_CD3_CD8_stroma.i", "percent_CD3_FoxP3_stroma.i", "percent_CD11b_stroma.i", "percent_CD11b_CD15_stroma.i",
+#                  "percent_CD3_tumor.p", "percent_CD3_CD8_tumor.p", "percent_CD3_FoxP3_tumor.p", "percent_CD11b_tumor.p", "percent_CD11b_CD15_tumor.p",
+#                  "percent_CD3_stroma.p", "percent_CD3_CD8_stroma.p", "percent_CD3_FoxP3_stroma.p", "percent_CD11b_stroma.p", "percent_CD11b_CD15_stroma.p"
+#                  ))
+# clust <- Mclust(scale(clust_markers[,c(2:ncol(clust_markers))]))
+# # summary(clust)
+# clust_markers$clusters_all_IandP <- clust$classification
+# clust_markers$clusters_all_IandP <- factor(clust_markers$clusters_all_IandP,
+#                                            levels = c(1, 2, 3, 4, 5),
+#                                            labels = c("mid", "high", "mid-high", "mid-low", "low"))
+# clust_markers <- clust_markers %>%
+#   mutate(clusters_all_IandP = factor(clusters_all_IandP,
+#                                      levels = c("low", "mid-low", "mid", "mid-high", "high")))
+# # clust_markers %>%
+# # tidyr::gather(key = "markers_cat", value = "value",
+# #               c("percent_CD3_tumor.i":"percent_CD11b_CD15_stroma.i")) %>%
+# #   select(suid, clusters_all_IandP, markers_cat, value) %>%
+# #   ggplot(aes(x=suid, y=value, group=markers_cat,  color=markers_cat))+
+# #   geom_boxplot()+
+# #   facet_grid(.~ clusters_all_IandP)
+# # clust_markers %>%
+# # tidyr::gather(key = "markers_cat", value = "value",
+# #               c("percent_CD3_tumor.p":"percent_CD11b_CD15_stroma.p")) %>%
+# #   select(suid, clusters_all_IandP, markers_cat, value) %>%
+# #   ggplot(aes(x=suid, y=value, group=markers_cat,  color=markers_cat))+
+# #   geom_boxplot()+
+# #   facet_grid(.~ clusters_all_IandP)
+# markers_ROI <- full_join(markers_ROI, clust_markers %>% select(suid, clusters_all_IandP), by = "suid")
 ```
 
 
@@ -431,10 +431,10 @@ markers_ROI %>%
 ```{r exposures table}
 exposure_var <- c("BMI_recent_grp", "BMI_YA_grp", "smokever", "smokcurrent",
                   "packyrs", "talcever", "talcgen", "talcnongen",
-                  "aspirin", "NSAID", "aceta", "hyster", "hyster1yr",
+                  "aspirin", "NSAID", "aceta", "hyster1yr",
                   "hyster2yr", "hystertype",
                   "tubelig", "tubelig1yr", "endomet", "fibroids",
-                  "pid", "strenpa", "education",
+                  "pid", "education",
                   "married", "anyfhdur") 
 marker_var <- c("percent_CD3_total.i", "percent_CD3_CD8_total.i", 
                 "percent_CD3_FoxP3_total.i", "percent_CD11b_total.i", 
@@ -450,7 +450,7 @@ markers_ROI %>%
          aspirin, NSAID,aceta, hyster, hyster1yr,
          hyster2yr, hystertype,
          tubelig, tubelig1yr, endomet, fibroids,
-         pid, strenpa, education,
+         pid, education,
          married, anyfhdur,
          race) %>% 
   tbl_summary(by = race,
@@ -459,10 +459,10 @@ markers_ROI %>%
               #              dblkstat_CA125 ~ "Debulking Status", adj ~ "Adjuvant chemotherapy",
               #              smoker ~ "Smoking status"),
               type = list(c(talcever, talcgen, talcnongen,
-                            aspirin, NSAID,aceta, hyster, hyster1yr,
+                            aspirin, NSAID,aceta, hyster1yr,
                             hyster2yr, hystertype,
                             tubelig, tubelig1yr, endomet, fibroids,
-                            pid, strenpa, education,
+                            pid, education,
                             married) ~ "categorical"),
               digits = list(all_continuous() ~ 1)
   ) %>%
@@ -472,122 +472,129 @@ markers_ROI %>%
 
 ## Violin plots
 ```{r violin}
-# # for (j in marker_var){
-# #   
-# #   for (i in exposure_var){
-# #     p1 <- markers_ROI %>% 
-# #       ggplot()+
-# #       geom_violin(aes(x=i, y=percent_CD3_total.i), scale = "count")+
-# #       geom_boxplot(aes(x=i, y=percent_CD3_total.i), width=.1) +
-# #       theme_classic2()+
-# #       labs(x=NULL, y=NULL, title="Intratumoral \nROIs")
-# #     p2 <- markers_ROI %>% 
-# #       ggplot()+
-# #       geom_violin(aes(x=i, y=j), scale = "count")+
-# #       geom_boxplot(aes(x=i, y=j), width=.1) +
-# #       theme_classic2()+
-# #       labs(x=NULL, y=NULL, title="Peripheral \nROIs")
-# #     
-# #     gridExtra::grid.arrange(p1, p2, ncol = 2, 
-# #                             top = "% of Cells Present in", left =  paste("Overall", markers_ROI[[i]], "immune cells (%) per patients"), 
-# #                             bottom = "Data on Race-Matched Patients")  
-# #   }
-# # }
-# 
-# violin_plot <- function(data, type){
-#   
+# for (j in marker_var){
+#
 #   for (i in exposure_var){
-#     
-#     if(class(markers_ROI[[i]]) == "factor" | class(markers_ROI[[i]]) == "character") {
-#       
-#       p1 <- markers_ROI %>% 
-#         ggplot()+
-#         geom_violin(aes(x=.data[[i]], y= .data[[paste0(type, ".i")]]), scale = "count")+
-#         geom_boxplot(aes(x=.data[[i]], y= .data[[paste0(type, ".i")]]), width=.1) +
-#         theme_classic2()+
-#         labs(x=NULL, y=NULL, title="Intratumoral \nROIs")
-#       p2 <- markers_ROI %>% 
-#         ggplot()+
-#         geom_violin(aes(x=.data[[i]], y= .data[[paste0(type, ".p")]]), scale = "count")+
-#         geom_boxplot(aes(x=.data[[i]], y= .data[[paste0(type, ".p")]]), width=.1) +
-#         theme_classic2()+
-#         labs(x=NULL, y=NULL, title="Peripheral \nROIs")
-#       
-#       main <- str_match(type, "percent_(.*)_total")[,2]
-#       gridExtra::grid.arrange(p1, p2, ncol = 2, 
-#                               top = "% of Cells Present in", 
-#                               left =  paste("Overall", main, "immune cells (%) per patients"), 
-#                               bottom = "Data on Race-Matched Patients")  
-#     }
+#     p1 <- markers_ROI %>%
+#       ggplot()+
+#       geom_violin(aes(x=i, y=percent_CD3_total.i), scale = "count")+
+#       geom_boxplot(aes(x=i, y=percent_CD3_total.i), width=.1) +
+#       theme_classic2()+
+#       labs(x=NULL, y=NULL, title="Intratumoral \nROIs")
+#     p2 <- markers_ROI %>%
+#       ggplot()+
+#       geom_violin(aes(x=i, y=j), scale = "count")+
+#       geom_boxplot(aes(x=i, y=j), width=.1) +
+#       theme_classic2()+
+#       labs(x=NULL, y=NULL, title="Peripheral \nROIs")
+#
+#     gridExtra::grid.arrange(p1, p2, ncol = 2,
+#                             top = "% of Cells Present in", left =  paste("Overall", markers_ROI[[i]], "immune cells (%) per patients"),
+#                             bottom = "Data on Race-Matched Patients")
 #   }
 # }
-# 
-# violin_plot(data = markers_ROI, type = "percent_CD3_total")
-# violin_plot(data = markers_ROI, type = "percent_CD3_CD8_total")
-# violin_plot(data = markers_ROI, type = "percent_CD3_FoxP3_total")
-# violin_plot(data = markers_ROI, type = "percent_CD11b_total")
-# violin_plot(data = markers_ROI, type = "percent_CD11b_CD15_total")
+
+violin_plot <- function(data, type){
+
+  for (i in exposure_var){
+
+    if(class(markers_ROI[[i]]) == "factor" | class(markers_ROI[[i]]) == "character") {
+
+      p1 <- markers_ROI %>%
+        ggplot()+
+        geom_violin(aes(x=.data[[i]], y= .data[[paste0(type, ".i")]]), scale = "count")+
+        geom_boxplot(aes(x=.data[[i]], y= .data[[paste0(type, ".i")]]), width=.1) +
+        theme_classic2()+
+        labs(x=NULL, y=NULL, title="Intratumoral \nROIs")
+      p2 <- markers_ROI %>%
+        ggplot()+
+        geom_violin(aes(x=.data[[i]], y= .data[[paste0(type, ".p")]]), scale = "count")+
+        geom_boxplot(aes(x=.data[[i]], y= .data[[paste0(type, ".p")]]), width=.1) +
+        theme_classic2()+
+        labs(x=NULL, y=NULL, title="Peripheral \nROIs")
+
+      main <- str_match(type, "percent_(.*)_total")[,2]
+      gridExtra::grid.arrange(p1, p2, ncol = 2,
+                              top = "% of Cells Present in",
+                              left =  paste("Overall", main, "immune cells (%) per patients"),
+                              bottom = "Data on Race-Matched Patients")
+    }
+  }
+}
+
+violin_plot(data = markers_ROI, type = "percent_CD3_total")
+violin_plot(data = markers_ROI, type = "percent_CD3_CD8_total")
+violin_plot(data = markers_ROI, type = "percent_CD3_FoxP3_total")
+violin_plot(data = markers_ROI, type = "percent_CD11b_total")
+violin_plot(data = markers_ROI, type = "percent_CD11b_CD15_total")
 ```
 
 ## Scatter plots
 ```{r point}
-# # markers_ROI %>% 
-# #         ggplot(aes(x=.data[[i]], y= .data[[paste0("percent_CD3_total", ".i")]]))+
-# #   geom_point()+
-# #   geom_smooth(method = "lm", se = FALSE) +
-# # stat_regline_equation(label.y.npc = 1)+
-# #         # geom_violin(aes(x=.data[[i]], y= .data[[paste0("percent_CD3_total", ".i")]]), scale = "count")+
-# #         # geom_boxplot(aes(x=.data[[i]], y= .data[[paste0("percent_CD3_total", ".i")]]), width=.1) +
-# #         theme_classic2()+
-# #         labs(x=NULL, y=NULL, title="Intratumoral \nROIs")
-# 
-# 
-# point_plot <- function(data, type){
-#   
-#   for (i in exposure_var){
-#     
-#     if(class(markers_ROI[[i]]) == "numeric" | class(markers_ROI[[i]]) == "integer") {
-#       
-#       p1 <- markers_ROI %>% 
-#         ggplot(aes(x=.data[[i]], y= .data[[paste0(type, ".i")]]))+
-#         geom_point()+
-#         geom_smooth(method = "lm", se = FALSE)+
-#         stat_regline_equation(label.y.npc = 1)+
+# markers_ROI %>%
+#         ggplot(aes(x=.data[[i]], y= .data[[paste0("percent_CD3_total", ".i")]]))+
+#   geom_point()+
+#   geom_smooth(method = "lm", se = FALSE) +
+# stat_regline_equation(label.y.npc = 1)+
+#         # geom_violin(aes(x=.data[[i]], y= .data[[paste0("percent_CD3_total", ".i")]]), scale = "count")+
+#         # geom_boxplot(aes(x=.data[[i]], y= .data[[paste0("percent_CD3_total", ".i")]]), width=.1) +
 #         theme_classic2()+
-#         labs(y=NULL, title="Intratumoral \nROIs")
-#       p2 <- markers_ROI %>% 
-#         ggplot(aes(x=.data[[i]], y= .data[[paste0(type, ".p")]]))+
-#         geom_point()+
-#         geom_smooth(method = "lm", se = FALSE)+
-#         stat_regline_equation(label.y.npc = 1)+
-#         theme_classic2()+
-#         labs(y=NULL, title="Peripheral \nROIs")
-#       
-#       main <- str_match(type, "percent_(.*)_total")[,2] %>% 
-#         str_remove(., "_")
-#       gridExtra::grid.arrange(p1, p2, ncol = 2, 
-#                               top = "% of Cells Present in", 
-#                               left =  paste("Overall", main, "immune cells (%) per patients"), 
-#                               bottom = "Data on Race-Matched Patients")  
-#     }
-#   }
-# }
-# point_plot(data = markers_ROI, type = "percent_CD3_total")
-# point_plot(data = markers_ROI, type = "percent_CD3_CD8_total")
-# point_plot(data = markers_ROI, type = "percent_CD3_FoxP3_total")
-# point_plot(data = markers_ROI, type = "percent_CD11b_total")
-# point_plot(data = markers_ROI, type = "percent_CD11b_CD15_total")
-```
+#         labs(x=NULL, y=NULL, title="Intratumoral \nROIs")
 
-# Logistic regression
+
+point_plot <- function(data, type){
+
+  for (i in exposure_var){
+
+    if(class(markers_ROI[[i]]) == "numeric" | class(markers_ROI[[i]]) == "integer") {
+
+      p1 <- markers_ROI %>%
+        ggplot(aes(x=.data[[i]], y= .data[[paste0(type, ".i")]]))+
+        geom_point()+
+        geom_smooth(method = "lm", se = FALSE)+
+        stat_regline_equation(label.y.npc = 1)+
+        theme_classic2()+
+        labs(y=NULL, title="Intratumoral \nROIs")
+      p2 <- markers_ROI %>%
+        ggplot(aes(x=.data[[i]], y= .data[[paste0(type, ".p")]]))+
+        geom_point()+
+        geom_smooth(method = "lm", se = FALSE)+
+        stat_regline_equation(label.y.npc = 1)+
+        theme_classic2()+
+        labs(y=NULL, title="Peripheral \nROIs")
+
+      main <- str_match(type, "percent_(.*)_total")[,2] %>%
+        str_remove(., "_")
+      gridExtra::grid.arrange(p1, p2, ncol = 2,
+                              top = "% of Cells Present in",
+                              left =  paste("Overall", main, "immune cells (%) per patients"),
+                              bottom = "Data on Race-Matched Patients")
+    }
+  }
+}
+point_plot(data = markers_ROI, type = "percent_CD3_total")
+point_plot(data = markers_ROI, type = "percent_CD3_CD8_total")
+point_plot(data = markers_ROI, type = "percent_CD3_FoxP3_total")
+point_plot(data = markers_ROI, type = "percent_CD11b_total")
+point_plot(data = markers_ROI, type = "percent_CD11b_CD15_total")
+```
+<br>
+<br>
+
+***
+***
+
+<br>
+
+# Logistic regression adjusted by age + stage + race
 
 ```{r log reg function}
 exp_var <- c("BMI_recent_grp", "BMI_recent_5", "BMI_YA_grp", "smokever", "smokcurrent",
                   "packyrs", "talcever", "talcgen", "talcnongen",
-                  "aspirin", "NSAID", "aceta", "hyster", "hyster1yr",
+                  "aspirin", "NSAID", "aceta", "hyster1yr",
                   "hyster2yr", "hystertype",
                   "tubelig", "endomet", "fibroids",
-                  "pid", "strenpa", "education",
+                  "pid", "education",
                   "married", "anyfhdur") 
 
 loreg_table_int <- function(data, type){
@@ -597,7 +604,8 @@ loreg_table_int <- function(data, type){
     main <- str_match(type, "(.*)_total")[,2] %>% 
       str_remove(., "_")
     
-    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]], data = data, family = "binomial") %>%
+    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + stage + race, 
+                data = data, family = "binomial") %>%
             tbl_regression(exponentiate = TRUE, 
                            label = list(`data[[i]]` ~ i)) %>% 
             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
@@ -613,7 +621,8 @@ loreg_table_per <- function(data, type){
     main <- str_match(type, "(.*)_total")[,2] %>%
       str_remove(., "_")
 
-    tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]], data = data, family = "binomial") %>%
+    tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + stage + race, 
+                data = data, family = "binomial") %>%
             tbl_regression(exponentiate = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral"))
@@ -622,6 +631,10 @@ loreg_table_per <- function(data, type){
   }
 }
 ```
+
+## Overall
+
+### CD3_total
 
 <div class = "row">
 <div class = "col-md-6">
@@ -632,12 +645,14 @@ loreg_table_int(data = markers_ROI, type = "CD3_total")
 
 <div class = "col-md-6">
 ```{r log reg periph, results = 'asis'}
-loreg_table_per(data = markers_ROI, type = "CD3_total")
+# loreg_table_per(data = markers_ROI, type = "CD3_total")
 ```
 </div>
 </div>
 
 ***
+
+### CD3_CD8_total
 
 <div class = "row">
 <div class = "col-md-6">
@@ -648,12 +663,14 @@ loreg_table_int(data = markers_ROI, type = "CD3_CD8_total")
 
 <div class = "col-md-6">
 ```{r, results = 'asis'}
-loreg_table_per(data = markers_ROI, type = "CD3_CD8_total")
+# loreg_table_per(data = markers_ROI, type = "CD3_CD8_total")
 ```
 </div>
 </div>
 
 ***
+
+### CD3_FoxP3_total
 
 <div class = "row">
 <div class = "col-md-6">
@@ -664,12 +681,14 @@ loreg_table_int(data = markers_ROI, type = "CD3_FoxP3_total")
 
 <div class = "col-md-6">
 ```{r, results = 'asis'}
-loreg_table_per(data = markers_ROI, type = "CD3_FoxP3_total")
+# loreg_table_per(data = markers_ROI, type = "CD3_FoxP3_total")
 ```
 </div>
 </div>
 
 ***
+
+### CD11b_total
 
 <div class = "row">
 <div class = "col-md-6">
@@ -680,12 +699,14 @@ loreg_table_int(data = markers_ROI, type = "CD11b_total")
 
 <div class = "col-md-6">
 ```{r, results = 'asis'}
-loreg_table_per(data = markers_ROI, type = "CD11b_total")
+# loreg_table_per(data = markers_ROI, type = "CD11b_total")
 ```
 </div>
 </div>
 
 ***
+
+### CD11b_CD15_total
 
 <div class = "row">
 <div class = "col-md-6">
@@ -696,12 +717,254 @@ loreg_table_int(data = markers_ROI, type = "CD11b_CD15_total")
 
 <div class = "col-md-6">
 ```{r, results = 'asis'}
-loreg_table_per(data = markers_ROI, type = "CD11b_CD15_total")
+# loreg_table_per(data = markers_ROI, type = "CD11b_CD15_total")
 ```
 </div>
 </div>
 
-## Immunoscore
+<br>
+
+***
+
+## White
+
+```{r}
+markers_ROI_white <- markers_ROI %>% 
+  filter(race == "White")
+```
+
+```{r}
+loreg_table_int <- function(data, type){
+  
+  for (i in exp_var){
+    
+    main <- str_match(type, "(.*)_total")[,2] %>% 
+      str_remove(., "_")
+    
+    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + stage, 
+                data = data, family = "binomial") %>%
+            tbl_regression(exponentiate = TRUE, 
+                           label = list(`data[[i]]` ~ i)) %>% 
+            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
+    print(tbl1)
+    
+  }
+}
+
+loreg_table_per <- function(data, type){
+
+  for (i in exp_var){
+
+    main <- str_match(type, "(.*)_total")[,2] %>%
+      str_remove(., "_")
+
+    tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + stage, 
+                data = data, family = "binomial") %>%
+            tbl_regression(exponentiate = TRUE,
+                           label = list(`data[[i]]` ~ i)) %>%
+            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral"))
+    print(tbl2)
+
+  }
+}
+```
+
+### CD3_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r log reg intra white, results = 'asis'}
+loreg_table_int(data = markers_ROI_white, type = "CD3_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r log reg periph white, results = 'asis'}
+# loreg_table_per(data = markers_ROI_white, type = "CD3_total")
+```
+</div>
+</div>
+
+***
+
+### CD3_CD8_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI_white, type = "CD3_CD8_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI_white, type = "CD3_CD8_total")
+```
+</div>
+</div>
+
+***
+
+### CD3_FoxP3_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI_white, type = "CD3_FoxP3_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI_white, type = "CD3_FoxP3_total")
+```
+</div>
+</div>
+
+***
+
+### CD11b_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI_white, type = "CD11b_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI_white, type = "CD11b_total")
+```
+</div>
+</div>
+
+***
+
+### CD11b_CD15_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI_white, type = "CD11b_CD15_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI_white, type = "CD11b_CD15_total")
+```
+</div>
+</div>
+
+<br>
+
+***
+
+## Black
+
+### CD3_total
+
+```{r}
+markers_ROI_black <- markers_ROI %>%
+  filter(race == "Black")
+```
+
+<div class = "row">
+<div class = "col-md-6">
+```{r log reg intra black, results = 'asis'}
+loreg_table_int(data = markers_ROI_black, type = "CD3_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r log reg periph black, results = 'asis'}
+# loreg_table_per(data = markers_ROI_black, type = "CD3_total")
+```
+</div>
+</div>
+
+***
+
+### CD3_CD8_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI_black, type = "CD3_CD8_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI_black, type = "CD3_CD8_total")
+```
+</div>
+</div>
+
+***
+
+### CD3_FoxP3_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI_black, type = "CD3_FoxP3_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI_black, type = "CD3_FoxP3_total")
+```
+</div>
+</div>
+
+***
+
+### CD11b_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI_black, type = "CD11b_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI_black, type = "CD11b_total")
+```
+</div>
+</div>
+
+***
+
+### CD11b_CD15_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI_black, type = "CD11b_CD15_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI_black, type = "CD11b_CD15_total")
+```
+</div>
+</div>
+
+<br>
+<br>
+
+***
+***
+
+<br>
+
+<!-- ## Immunoscore -->
 
 ```{r multi reg function}
 multinom_pivot_wider <- function(x) {
@@ -709,36 +972,37 @@ multinom_pivot_wider <- function(x) {
   if (!inherits(x, "tbl_regression") || !inherits(x$model_obj, "multinom")) {
     stop("`x=` must be class 'tbl_regression' summary of a `nnet::multinom()` model.")
   }
-  
+
   # create tibble of results
   df <- tibble::tibble(outcome_level = unique(x$table_body$groupname_col))
-  df$tbl <- 
+  df$tbl <-
     purrr::map(
       df$outcome_level,
       function(lvl) {
         gtsummary::modify_table_body(
-          x, 
+          x,
           ~dplyr::filter(.x, .data$groupname_col %in% lvl) %>%
             dplyr::ungroup() %>%
             dplyr::select(-.data$groupname_col)
         )
       }
     )
-  
+
   tbl_merge(df$tbl, tab_spanner = paste0("**", df$outcome_level, "**"))
 }
 
 multireg_table_int <- function(data){
-  
+
   for (i in exp_var){
-    
-    tbl1 <- multinom(immunoscore_patients ~ data[[i]], data = data) %>%
-            tbl_regression(exponentiate = TRUE, 
+
+    tbl1 <- multinom(immunoscore_patients ~ data[[i]] + refage + stage + race,
+                     data = data) %>%
+            tbl_regression(exponentiate = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
-  multinom_pivot_wider() #%>% 
+  multinom_pivot_wider() #%>%
             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral"))
     print(tbl1)
-    
+
   }
 }
 
@@ -746,7 +1010,8 @@ multireg_table_per <- function(data, type){
 
   for (i in exp_var){
 
-    tbl2 <- multinom(immunoscore_patients ~ data[[i]], data = data) %>%
+    tbl2 <- multinom(immunoscore_patients ~ data[[i]] + refage + stage + race,
+                     data = data) %>%
             tbl_regression(exponentiate = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
   multinom_pivot_wider()# %>%
@@ -756,7 +1021,7 @@ multireg_table_per <- function(data, type){
   }
 }
 ```
-Intatumoral
+<!-- Intratumoral -->
 
 <div class = "row">
 <div class = "col-md-6">
@@ -769,25 +1034,34 @@ Intatumoral
 #   tbl_regression(exponentiate = TRUE) %>%
 #   multinom_pivot_wider()
 
-multireg_table_int(data = markers_ROI)
+# multireg_table_int(data = markers_ROI)
 ```
 </div>
 
-Peripheral 
+<!-- Peripheral  -->
 
 <div class = "col-md-6">
 ```{r, results = 'asis'}
-multireg_table_per(data = markers_ROI)
+# multireg_table_per(data = markers_ROI)
 ```
 </div>
 </div>
+
+# Immunoscore 3 cat 2018lancet
+
+What are the weight?
+```{r}
+multinom(immunoscore_2018lancet_patients ~ immunoscore_patients + refage + stage + race,
+                     data = markers_ROI)
+```
 
 ```{r multi reg}
 multireg_table_int <- function(data){
 
   for (i in exp_var){
 
-    tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]], data = data) %>%
+    tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + stage + race,
+                     data = data) %>%
             tbl_regression(exponentiate = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
   multinom_pivot_wider()# %>%
@@ -801,7 +1075,8 @@ multireg_table_per <- function(data){
 
   for (i in exp_var){
 
-    tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]], data = data) %>%
+    tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + stage + race,
+                     data = data) %>%
             tbl_regression(exponentiate = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
   multinom_pivot_wider()# %>%
@@ -811,7 +1086,10 @@ multireg_table_per <- function(data){
   }
 }
 ```
-Intatumoral
+
+## Overall
+
+### Intratumoral
 
 <div class = "row">
 <div class = "col-md-6">
@@ -820,56 +1098,7 @@ multireg_table_int(data = markers_ROI)
 ```
 </div>
 
-Peripheral 
-
-<div class = "col-md-6">
-```{r, results = 'asis'}
-multireg_table_per(data = markers_ROI)
-```
-</div>
-</div>
-
-## Cluster
-
-```{r multi reg cluster}
-multireg_table_int <- function(data){
-
-  for (i in exp_var){
-
-    tbl1 <- multinom(clusters_all_IandP ~ data[[i]], data = data) %>%
-            tbl_regression(exponentiate = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>%
-  multinom_pivot_wider() #%>%
-            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral"))
-    print(tbl1)
-
-  }
-}
-
-multireg_table_per <- function(data){
-
-  for (i in exp_var){
-
-    tbl2 <- multinom(clusters_all_IandP ~ data[[i]], data = data) %>%
-            tbl_regression(exponentiate = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>%
-  multinom_pivot_wider() #%>%
-            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Peripheral"))
-    print(tbl2)
-
-  }
-}
-```
-Intatumoral
-
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-multireg_table_int(data = markers_ROI)
-```
-</div>
-
-Peripheral 
+### Peripheral
 
 <div class = "col-md-6">
 ```{r, results = 'asis'}
@@ -879,5 +1108,143 @@ multireg_table_per(data = markers_ROI)
 </div>
 
 <br>
+
+***
+
+## White
+
+```{r multi reg function race}
+multireg_table_int <- function(data){
+
+  for (i in exp_var){
+
+    tbl1 <- multinom(immunoscore_patients ~ data[[i]] + refage + stage,
+                     data = data) %>%
+            tbl_regression(exponentiate = TRUE,
+                           label = list(`data[[i]]` ~ i)) %>%
+  multinom_pivot_wider() #%>%
+            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral"))
+    print(tbl1)
+
+  }
+}
+
+multireg_table_per <- function(data, type){
+
+  for (i in exp_var){
+
+    tbl2 <- multinom(immunoscore_patients ~ data[[i]] + refage + stage,
+                     data = data) %>%
+            tbl_regression(exponentiate = TRUE,
+                           label = list(`data[[i]]` ~ i)) %>%
+  multinom_pivot_wider()# %>%
+            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Peripheral"))
+    print(tbl2)
+
+  }
+}
+```
+
+### Intratumoral
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+multireg_table_int(data = markers_ROI_white)
+```
+</div>
+
+### Peripheral
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+multireg_table_per(data = markers_ROI_white)
+```
+</div>
+</div>
+
+<br>
+
+***
+
+## Black
+
+### Intratumoral
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+multireg_table_int(data = markers_ROI_black)
+```
+</div>
+
+### Peripheral
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+multireg_table_per(data = markers_ROI_black)
+```
+</div>
+</div>
+
+<br>
+
+***
+***
+
+<br>
+
+<!-- # Cluster -->
+
+<!-- ```{r multi reg cluster} -->
+<!-- # multireg_table_int <- function(data){ -->
+<!-- #  -->
+<!-- #   for (i in exp_var){ -->
+<!-- #  -->
+<!-- #     tbl1 <- multinom(clusters_all_IandP ~ data[[i]] + refage + stage + race, -->
+<!-- #                      data = data) %>% -->
+<!-- #             tbl_regression(exponentiate = TRUE, -->
+<!-- #                            label = list(`data[[i]]` ~ i)) %>% -->
+<!-- #   multinom_pivot_wider() #%>% -->
+<!-- #             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral")) -->
+<!-- #     print(tbl1) -->
+<!-- #  -->
+<!-- #   } -->
+<!-- # } -->
+<!-- #  -->
+<!-- # multireg_table_per <- function(data){ -->
+<!-- #  -->
+<!-- #   for (i in exp_var){ -->
+<!-- #  -->
+<!-- #     tbl2 <- multinom(clusters_all_IandP ~ data[[i]] + refage + stage + race, -->
+<!-- #                      data = data) %>% -->
+<!-- #             tbl_regression(exponentiate = TRUE, -->
+<!-- #                            label = list(`data[[i]]` ~ i)) %>% -->
+<!-- #   multinom_pivot_wider() #%>% -->
+<!-- #             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Peripheral")) -->
+<!-- #     print(tbl2) -->
+<!-- #  -->
+<!-- #   } -->
+<!-- # } -->
+<!-- ``` -->
+<!-- <!-- Intratumoral --> -->
+
+<!-- <!-- <div class = "row"> --> -->
+<!-- <!-- <div class = "col-md-6"> --> -->
+<!-- <!-- ```{r, results = 'asis'} --> -->
+<!-- <!-- multireg_table_int(data = markers_ROI) --> -->
+<!-- <!-- ``` --> -->
+<!-- <!-- </div> --> -->
+
+<!-- <!-- Peripheral  --> -->
+
+<!-- <!-- <div class = "col-md-6"> --> -->
+<!-- <!-- ```{r, results = 'asis'} --> -->
+<!-- <!-- multireg_table_per(data = markers_ROI) --> -->
+<!-- <!-- ``` --> -->
+<!-- <!-- </div> --> -->
+<!-- <!-- </div> --> -->
+
+<!-- <!-- <br> --> -->
 
 
