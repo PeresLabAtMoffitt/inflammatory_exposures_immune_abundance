@@ -65,7 +65,7 @@ library(gplots)
 
 ```{r load}
 ROI_global <- readRDS(paste0(here::here(), "/ROI_global.rds"))
-clinical_data <- readRDS(paste0(here::here(), "/clinical_data.rds"))
+clinical_data <- readRDS(paste0(here::here(), "/clinical_data1.rds"))
 # Rewove patients not matched or lost match
 ROI_global <- left_join(ROI_global, clinical_data, by="suid") %>%
   filter(!image_tag %in% c("Peres_P1_150163  3D_[44113,18531].tif", 
@@ -350,14 +350,14 @@ markers_ROI <- markers_ROI %>%
   mutate(percentile_score_mean = rowMeans( markers_ROI[c("percentile_score_CD3_i", "percentile_score_CD3_p", 
                                                     "percentile_score_CD8_i", "percentile_score_CD8_p")] ))
 markers_ROI <- markers_ROI %>%
-  mutate(immunoscore_patients = case_when(
-    percentile_score_mean <= 10        ~ 0,
-    percentile_score_mean <= 25        ~ 1,
-    percentile_score_mean <= 70        ~ 2,
-    percentile_score_mean <= 95        ~ 3,
-    percentile_score_mean > 95         ~ 4 
-  )) %>% 
-  mutate(immunoscore_patients = factor(immunoscore_patients)) %>% 
+  # mutate(immunoscore_patients = case_when(
+  #   percentile_score_mean <= 10        ~ 0,
+  #   percentile_score_mean <= 25        ~ 1,
+  #   percentile_score_mean <= 70        ~ 2,
+  #   percentile_score_mean <= 95        ~ 3,
+  #   percentile_score_mean > 95         ~ 4 
+  # )) %>% 
+  # mutate(immunoscore_patients = factor(immunoscore_patients)) %>% 
   mutate(immunoscore_2018lancet_patients = case_when(
     percentile_score_mean <= 25        ~ "Low",
     percentile_score_mean <= 70        ~ "Intermediate",
@@ -429,13 +429,14 @@ markers_ROI %>%
 
 ## Summary table
 ```{r exposures table}
-exposure_var <- c("BMI_recent_grp", "BMI_YA_grp", "smokever", "smokcurrent",
-                  "packyrs", "talcever", "talcgen", "talcnongen",
+exposure_var <- c("BMI_recent_grp", "BMI_YA_grp", "diab",
+                  "smokever", "smokcurrent",
+                  "packyrs", "packyrs_cat", "talcever", "talcgen", "talcnongen",
                   "aspirin", "NSAID", "aceta", "hyster1yr",
                   "hyster2yr", "hystertype",
-                  "tubelig", "tubelig1yr", "endomet", "fibroids",
+                  "tubelig", "endomet", "fibroids",
                   "pid", "education",
-                  "married", "anyfhdur") 
+                  "married", "anyfhever", "anyfhdur", "anyfhdur_cat") 
 marker_var <- c("percent_CD3_total.i", "percent_CD3_CD8_total.i", 
                 "percent_CD3_FoxP3_total.i", "percent_CD11b_total.i", 
                 "percent_CD11b_CD15_total.i",
@@ -445,28 +446,282 @@ marker_var <- c("percent_CD3_total.i", "percent_CD3_CD8_total.i",
 
 markers_ROI %>% 
   distinct(suid, .keep_all = TRUE) %>% 
-  select(BMI_recent_grp, BMI_YA_grp, smokever, smokcurrent,
-         packyrs, talcever, talcgen, talcnongen,
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
          aspirin, NSAID,aceta, hyster, hyster1yr,
          hyster2yr, hystertype,
-         tubelig, tubelig1yr, endomet, fibroids,
+         tubelig, endomet, fibroids,
          pid, education,
-         married, anyfhdur,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat,
          race) %>% 
   tbl_summary(by = race,
               statistic = list(all_continuous() ~ "{mean} ({sd})"),
               # label = list(refage ~ "Age at diagnosis", refage_cat ~ "Age at diagnosis category",
               #              dblkstat_CA125 ~ "Debulking Status", adj ~ "Adjuvant chemotherapy",
               #              smoker ~ "Smoking status"),
-              type = list(c(talcever, talcgen, talcnongen,
-                            aspirin, NSAID,aceta, hyster1yr,
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta, 
+                            hyster, hyster1yr,
                             hyster2yr, hystertype,
-                            tubelig, tubelig1yr, endomet, fibroids,
-                            pid, education,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
                             married) ~ "categorical"),
               digits = list(all_continuous() ~ 1)
   ) %>%
   modify_header(list(label ~ "**Patient Exposure characteristics**", all_stat_cols() ~ "**{level}**, N = {n}")) %>% 
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+
+## Intratumoral CD3 total - Overall pop
+```{r}
+markers_ROI %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
+         aspirin, NSAID,aceta, hyster, hyster1yr,
+         hyster2yr, hystertype,
+         tubelig, endomet, fibroids,
+         pid, education,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat, CD3_total.i) %>% 
+  tbl_summary(by = CD3_total.i,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta,
+                            hyster, hyster1yr,
+                            hyster2yr, hystertype,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
+                            married) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+## Intratumoral CD3 total - White
+```{r}
+markers_ROI %>% 
+  filter(race == "White") %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
+         aspirin, NSAID,aceta, hyster, hyster1yr,
+         hyster2yr, hystertype,
+         tubelig, endomet, fibroids,
+         pid, education,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat, CD3_total.i) %>% 
+  tbl_summary(by = CD3_total.i,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta,
+                            hyster, hyster1yr,
+                            hyster2yr, hystertype,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
+                            married) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+## Intratumoral CD3 total - Black
+```{r}
+markers_ROI %>% 
+  filter(race == "Black") %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
+         aspirin, NSAID,aceta, hyster, hyster1yr,
+         hyster2yr, hystertype,
+         tubelig, endomet, fibroids,
+         pid, education,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat, CD3_total.i) %>% 
+  tbl_summary(by = CD3_total.i,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta,
+                            hyster, hyster1yr,
+                            hyster2yr, hystertype,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
+                            married) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+## Intratumoral CD3CD8 total - Overall pop
+```{r}
+markers_ROI %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
+         aspirin, NSAID,aceta, hyster, hyster1yr,
+         hyster2yr, hystertype,
+         tubelig, endomet, fibroids,
+         pid, education,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat, CD3_CD8_total.i) %>% 
+  tbl_summary(by = CD3_CD8_total.i,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta,
+                            hyster, hyster1yr,
+                            hyster2yr, hystertype,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
+                            married) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+## Intratumoral CD3CD8 total - White
+```{r}
+markers_ROI %>% 
+  filter(race == "White") %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
+         aspirin, NSAID,aceta, hyster, hyster1yr,
+         hyster2yr, hystertype,
+         tubelig, endomet, fibroids,
+         pid, education,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat, CD3_CD8_total.i) %>% 
+  tbl_summary(by = CD3_CD8_total.i,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta,
+                            hyster, hyster1yr,
+                            hyster2yr, hystertype,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
+                            married) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+## Intratumoral CD3CD8 total - Black
+```{r}
+markers_ROI %>% 
+  filter(race == "Black") %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
+         aspirin, NSAID,aceta, hyster, hyster1yr,
+         hyster2yr, hystertype,
+         tubelig, endomet, fibroids,
+         pid, education,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat, CD3_CD8_total.i) %>% 
+  tbl_summary(by = CD3_CD8_total.i,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta,
+                            hyster, hyster1yr,
+                            hyster2yr, hystertype,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
+                            married) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+## Intratumoral Immunoscore - Overall pop
+```{r}
+markers_ROI %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
+         aspirin, NSAID,aceta, hyster, hyster1yr,
+         hyster2yr, hystertype,
+         tubelig, endomet, fibroids,
+         pid, education,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat, immunoscore_2018lancet_patients) %>% 
+  tbl_summary(by = immunoscore_2018lancet_patients,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta,
+                            hyster, hyster1yr,
+                            hyster2yr, hystertype,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
+                            married) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+## Intratumoral Immunoscore - White
+```{r}
+markers_ROI %>% 
+  filter(race == "White") %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
+         aspirin, NSAID,aceta, hyster, hyster1yr,
+         hyster2yr, hystertype,
+         tubelig, endomet, fibroids,
+         pid, education,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat, immunoscore_2018lancet_patients) %>% 
+  tbl_summary(by = immunoscore_2018lancet_patients,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta,
+                            hyster, hyster1yr,
+                            hyster2yr, hystertype,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
+                            married) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+## Intratumoral Immunoscore - Black
+```{r}
+markers_ROI %>% 
+  filter(race == "Black") %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(BMI_recent_grp, BMI_YA_grp, diab,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, talcever, talcgen, talcnongen,
+         aspirin, NSAID,aceta, hyster, hyster1yr,
+         hyster2yr, hystertype,
+         tubelig, endomet, fibroids,
+         pid, education,
+         married, 
+         anyfhever, anyfhdur, anyfhdur_cat, immunoscore_2018lancet_patients) %>% 
+  tbl_summary(by = immunoscore_2018lancet_patients,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list(c(diab,
+                talcever, talcgen, talcnongen,
+                            aspirin, NSAID,aceta,
+                            hyster, hyster1yr,
+                            hyster2yr, hystertype,
+                            tubelig, endomet, fibroids,
+                            pid, education, anyfhever,
+                            married) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
   add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
 ```
 
@@ -589,13 +844,14 @@ point_plot(data = markers_ROI, type = "percent_CD11b_CD15_total")
 # Logistic regression adjusted by age + stage + race
 
 ```{r log reg function}
-exp_var <- c("BMI_recent_grp", "BMI_recent_5", "BMI_YA_grp", "smokever", "smokcurrent",
-                  "packyrs", "talcever", "talcgen", "talcnongen",
+exp_var <- c("BMI_recent_grp", "BMI_recent_5", "BMI_YA_grp", "diab",
+             "smokever", "smokcurrent",
+                  "packyrs", "packyrs_cat", "talcever", "talcgen", "talcnongen",
                   "aspirin", "NSAID", "aceta", "hyster1yr",
                   "hyster2yr", "hystertype",
                   "tubelig", "endomet", "fibroids",
                   "pid", "education",
-                  "married", "anyfhdur") 
+                  "married", "anyfhever", "anyfhdur", "anyfhdur_cat") 
 
 loreg_table_int <- function(data, type){
   
@@ -995,7 +1251,7 @@ multireg_table_int <- function(data){
 
   for (i in exp_var){
 
-    tbl1 <- multinom(immunoscore_patients ~ data[[i]] + refage + stage + race,
+    tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + stage + race,
                      data = data) %>%
             tbl_regression(exponentiate = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
@@ -1010,7 +1266,7 @@ multireg_table_per <- function(data, type){
 
   for (i in exp_var){
 
-    tbl2 <- multinom(immunoscore_patients ~ data[[i]] + refage + stage + race,
+    tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + stage + race,
                      data = data) %>%
             tbl_regression(exponentiate = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
@@ -1051,7 +1307,7 @@ multireg_table_per <- function(data, type){
 
 What are the weight?
 ```{r}
-multinom(immunoscore_2018lancet_patients ~ immunoscore_patients + refage + stage + race,
+multinom(immunoscore_2018lancet_patients ~ immunoscore_2018lancet_patients + refage + stage + race,
                      data = markers_ROI)
 ```
 
@@ -1118,7 +1374,7 @@ multireg_table_int <- function(data){
 
   for (i in exp_var){
 
-    tbl1 <- multinom(immunoscore_patients ~ data[[i]] + refage + stage,
+    tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + stage,
                      data = data) %>%
             tbl_regression(exponentiate = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
@@ -1133,7 +1389,7 @@ multireg_table_per <- function(data, type){
 
   for (i in exp_var){
 
-    tbl2 <- multinom(immunoscore_patients ~ data[[i]] + refage + stage,
+    tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + stage,
                      data = data) %>%
             tbl_regression(exponentiate = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
