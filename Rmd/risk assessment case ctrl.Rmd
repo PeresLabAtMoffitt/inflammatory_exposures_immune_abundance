@@ -1,0 +1,680 @@
+---
+title: "Risk assessment"
+author: "Christelle Colin-Leitzinger"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: false
+    theme: cerulean #darkly
+    highlight: pygments
+    df_print: paged
+editor_options: 
+  chunk_output_type: console
+---
+
+<style type="text/css">
+h1.title {
+  font-size: 25px;
+}
+.figure {
+   margin-top: 25px;
+   margin-bottom: 25;
+}
+
+table {
+    margin-top: 25px;
+    margin-bottom: 10px;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      cache = FALSE,
+                      # fig.width = 7, fig.height = 5, 
+                      fig.align='center'#, fig.show='hold'
+                      )
+options(gtsummary.print_engine = "gt")
+options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.size = 14, data_row.padding = gt::px(1))")
+```
+
+<style>
+div.blue { background-color:#0099CC; border-radius: 5px; padding: 20px; font-size: 38px}
+</style>
+<div class = "blue">
+
+<span style="color: white;">Risk assessment inflammatory-related exposures and immune cell abundance</span>
+
+</div>
+<br>
+
+```{r library, include=FALSE}
+# library(drake)
+library(tidyverse)
+library(data.table)
+library(nnet)
+library(gtsummary)
+library(survival)
+library(survminer)
+library(mclust)
+library(gplots)
+```
+
+# Risk assessement
+## Overall population
+```{r}
+library(riskclustr)
+
+ctrl_case <- read_csv(paste0(here::here(), "/DataforChristelle.csv")) %>% 
+  `colnames<-`(str_remove_all(colnames(.), " kg/m2|-") %>% 
+                 str_replace_all(., ">", "sup"))
+
+# ctrl_case <- ctrl_case %>% 
+#   mutate(smokcurrent = case_when(
+#     smokcurrent == "never"      ~ 1,
+#     smokcurrent == "former"      ~ 2,
+#     smokcurrent == "current"      ~ 3
+#   ),
+#   smokcurrent = factor(smokcurrent))
+
+colnames(ctrl_case)
+```
+
+### 2 levels factor variable
+```{r}
+factor_name <- c("talcever", "endomet", "fibroids", "pid",
+                 "smokever", "aspirin")
+
+risk_ass <- function(data, type){
+
+  for (i in factor_name){
+
+    print(paste("RISK ASSESSMENT FOR ->", i, ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "race", i), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+  }
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass(data = ctrl_case, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass(data = ctrl_case, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass(data = ctrl_case, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass(data = ctrl_case, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass(data = ctrl_case, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass(data = ctrl_case, type = "CD3CD8_stroma_cat")
+```
+
+### 3 levels factor variable - BMI recent
+```{r}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_recent_grp_2530", "BMI_recent_grp_sup30", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "race", "BMI_recent_grp_2530", "BMI_recent_grp_sup30"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "BMI_recent_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_recent_grp",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3CD8_stroma_cat")
+```
+
+### 3 levels factor variable - BMI YA
+```{r}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_YA_grp_2530", "BMI_YA_grp_sup30", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "race", "BMI_YA_grp_2530", "BMI_YA_grp_sup30"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "BMI_YA_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_YA_grp",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3CD8_stroma_cat")
+```
+
+### 3 levels factor variable - smokcurrent
+```{r}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "smokcurrent_current", "smokcurrent_former", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "race", "smokcurrent_current", "smokcurrent_former"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "smokcurrent", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "smokcurrent",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3CD8_stroma_cat")
+```
+
+```{r}
+# risk <- eh_test_subtype(label = "CD3_tumor_cat", 
+#                 M = 2, 
+#                 factors = list("refage", "race", 
+#                                "smokcurrent_current", 
+#                                "smokcurrent_former"), 
+#                 data = ctrl_case)
+# risk
+# 
+# posthoc_factor_test(fit = risk,
+#                     factor = "smokcurrent_current",
+#                     nlevels = 2)
+# 
+# 
+# risk <- eh_test_subtype(label = "CD3_tumor_cat",
+#                 M = 2,
+#                 factors = list("refage", "race",
+#                                "smokcurrent_former",
+#                                "smokcurrent_current"),
+#                 data = ctrl_case)
+# risk
+# 
+# posthoc_factor_test(fit = risk,
+#                     factor = "smokcurrent",
+#                     nlevels = 3)
+```
+<br>
+<br>
+
+***
+
+## White
+```{r}
+ctrl_case_white <- ctrl_case %>% 
+  filter(race == "White")
+```
+
+### 2 levels factor variable
+```{r}
+factor_name <- c("talcever", "endomet", "fibroids", "pid",
+                 "smokever", "aspirin")
+
+risk_ass <- function(data, type){
+
+  for (i in factor_name){
+
+    print(paste("RISK ASSESSMENT FOR ->", i, ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", i), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+  }
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3CD8_stroma_cat")
+```
+
+### 3 levels factor variable - BMI recent
+```{r}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_recent_grp_2530", "BMI_recent_grp_sup30", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "BMI_recent_grp_2530", "BMI_recent_grp_sup30"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "BMI_recent_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_recent_grp",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_stroma_cat")
+```
+
+### 3 levels factor variable - BMI YA
+```{r}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_YA_grp_2530", "BMI_YA_grp_sup30", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "BMI_YA_grp_2530", "BMI_YA_grp_sup30"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "BMI_YA_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_YA_grp",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_stroma_cat")
+```
+
+### 3 levels factor variable - smokcurrent
+```{r}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "smokcurrent_current", "smokcurrent_former", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "smokcurrent_current", "smokcurrent_former"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "smokcurrent", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "smokcurrent",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_stroma_cat")
+```
+<br>
+<br>
+
+***
+
+## Black
+```{r}
+ctrl_case_white <- ctrl_case %>% 
+  filter(race == "Black")
+```
+
+### 2 levels factor variable
+```{r}
+factor_name <- c("talcever", "endomet", "fibroids", "pid",
+                 "smokever", "aspirin")
+
+risk_ass <- function(data, type){
+
+  for (i in factor_name){
+
+    print(paste("RISK ASSESSMENT FOR ->", i, ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", i), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+  }
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass(data = ctrl_case_white, type = "CD3CD8_stroma_cat")
+```
+
+### 3 levels factor variable - BMI recent
+```{r}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_recent_grp_2530", "BMI_recent_grp_sup30", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "BMI_recent_grp_2530", "BMI_recent_grp_sup30"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "BMI_recent_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_recent_grp",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_stroma_cat")
+```
+
+### 3 levels factor variable - BMI YA
+```{r}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_YA_grp_2530", "BMI_YA_grp_sup30", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "BMI_YA_grp_2530", "BMI_YA_grp_sup30"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "BMI_YA_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_YA_grp",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_stroma_cat")
+```
+
+### 3 levels factor variable - smokcurrent
+```{r}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "smokcurrent_current", "smokcurrent_former", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "smokcurrent_current", "smokcurrent_former"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "smokcurrent", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "smokcurrent",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_tumor_cat")
+```
+#### CD3_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_total_cat")
+```
+#### CD3_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3_stroma_cat")
+```
+#### CD3CD8_tumor_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_tumor_cat")
+```
+#### CD3CD8_total_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_total_cat")
+```
+#### CD3CD8_stroma_cat
+```{r}
+risk_ass_bmi(data = ctrl_case_white, type = "CD3CD8_stroma_cat")
+```
+<br>
+<br>
+
+***
+
+
