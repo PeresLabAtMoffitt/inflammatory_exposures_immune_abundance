@@ -70,7 +70,12 @@ library(riskclustr)
 
 ctrl_case <- read_csv(paste0(here::here(), "/DataforChristelle.csv")) %>% 
   `colnames<-`(str_remove_all(colnames(.), " kg/m2|-") %>% 
-                 str_replace_all(., ">", "sup"))
+                 str_replace_all(., ">", "sup")) %>% 
+  mutate(BMI_YA_2grp = case_when(
+    BMI_YA_grp == "<25 kg/m2"           ~ "<25 kg/m2",
+    BMI_YA_grp == "25-30 kg/m2" |
+      BMI_YA_grp == ">30 kg/m2"         ~ "≥25 kg/m2"
+  ))
 
 # ctrl_case <- ctrl_case %>% 
 #   mutate(smokcurrent = case_when(
@@ -85,7 +90,7 @@ colnames(ctrl_case)
 
 ### 2 levels factor variable
 ```{r}
-factor_name <- c("talcever", "endomet", "fibroids", "pid",
+factor_name <- c("BMI_YA_2grp", "talcever", "endomet", "fibroids", "pid",
                  "smokever", "aspirin")
 
 risk_ass <- function(data, type){
@@ -303,9 +308,6 @@ ctrl_case_white <- ctrl_case %>%
 
 ### 2 levels factor variable
 ```{r}
-factor_name <- c("talcever", "endomet", "fibroids", "pid",
-                 "smokever", "aspirin")
-
 risk_ass <- function(data, type){
 
   for (i in factor_name){
@@ -494,9 +496,6 @@ ctrl_case_white <- ctrl_case %>%
 
 ### 2 levels factor variable
 ```{r}
-factor_name <- c("talcever", "endomet", "fibroids", "pid",
-                 "smokever", "aspirin")
-
 risk_ass <- function(data, type){
 
   for (i in factor_name){
