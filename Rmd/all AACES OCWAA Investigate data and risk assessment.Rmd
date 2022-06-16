@@ -1,0 +1,1047 @@
+---
+title: "Investigate data"
+author: "Christelle Colin-Leitzinger"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: false
+    theme: cerulean #darkly
+    highlight: pygments
+    df_print: paged
+editor_options: 
+  chunk_output_type: console
+---
+
+<style type="text/css">
+h1.title {
+  font-size: 25px;
+}
+.figure {
+   margin-top: 25px;
+   margin-bottom: 25;
+}
+
+table {
+    margin-top: 25px;
+    margin-bottom: 10px;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      cache = FALSE,
+                      fig.align='center'
+                      )
+options(gtsummary.print_engine = "gt")
+options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.size = 14, data_row.padding = gt::px(1))")
+```
+
+<style>
+div.blue { background-color:#0099CC; border-radius: 5px; padding: 20px; font-size: 38px}
+</style>
+<div class = "blue">
+
+<span style="color: white;">Association between pre-diagnostic inflammatory-related exposures and immune cell abundance</span>
+
+</div>
+<br>
+
+```{r library, include=FALSE}
+library(tidyverse)
+library(fastDummies)
+library(data.table)
+library(labelled)
+library(nnet)
+library(gtsummary)
+library(ggplot2)
+library(survival)
+library(survminer)
+library(mclust)
+library(gplots)
+library(riskclustr)
+```
+
+```{r load}
+markers_ROI <- readRDS(paste0(here::here(), "/markers_ROI_category.rds"))
+```
+
+```{r}
+var_label(markers_ROI) <- list(refage ~ "Age at diagnosis", refage_cat ~ "Age at diagnosis category",
+                           smokcurrent ~ "Smoking status"
+) 
+```
+
+
+# I. Data exploration
+## Compare patient characteristics for patients with vs. without immune data
+```{r Compare patient}
+no_immune_data <- markers_ROI %>% filter(is.na(percent_CD3_total.i) & is.na(percent_CD3_total.p))
+have_immune_data <- markers_ROI %>% filter(!is.na(percent_CD3_total.i) | !is.na(percent_CD3_total.p))
+
+markers_ROI %>% 
+  mutate(have_immune_data = case_when(
+    !is.na(percent_CD3_total.i) | 
+      !is.na(percent_CD3_total.p)        ~ "Have immune data",
+    TRUE                                 ~ "No immune data"
+  )) %>% 
+  filter(casecon == "Case") %>% 
+  select(diagyear, refage, refage_cat, 
+         histotype, histotype1, histotype2,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, 
+         BMI_recent_grp, BMI_YA_grp, 
+         endomet, pid, fibroids,
+         talcever, talcgen, talcnongen,
+         diab, hrtdis, hbp, hchol,
+         aspirin, NSAID, aceta, 
+         inactive, paga, loc,
+         education,diidensity, diidenswithsupp,
+         perceived_discrim, phys_trust,
+         have_immune_data) %>% 
+  tbl_summary(by = have_immune_data,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              digits = list(all_continuous() ~ 1)) %>%
+  bold_labels() %>% 
+  add_overall() %>% add_p() %>% bold_p(t= .05)
+
+no_immune_data <- no_immune_data %>% 
+  select(diagyear, refage, refage_cat, 
+         histotype, histotype1, histotype2,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, 
+         BMI_recent_grp, BMI_YA_grp, 
+         endomet, pid, fibroids,
+         talcever, talcgen, talcnongen,
+         diab, hrtdis, hbp, hchol,
+         aspirin, NSAID, aceta, 
+         inactive, paga, loc,
+         education,diidensity, diidenswithsupp,
+         perceived_discrim, phys_trust,
+         casecon) %>% 
+  tbl_summary(by = casecon,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              digits = list(all_continuous() ~ 1)) %>%
+  bold_labels()
+
+have_immune_data <- have_immune_data %>% 
+  select(diagyear, refage, refage_cat, 
+         histotype, histotype1, histotype2,
+         smokever, smokcurrent,
+         packyrs, packyrs_cat, 
+         BMI_recent_grp, BMI_YA_grp, 
+         endomet, pid, fibroids,
+         talcever, talcgen, talcnongen,
+         diab, hrtdis, hbp, hchol,
+         aspirin, NSAID, aceta, 
+         inactive, paga, loc,
+         education,diidensity, diidenswithsupp,
+         perceived_discrim, phys_trust,
+         casecon) %>% 
+  tbl_summary(by = casecon,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              digits = list(all_continuous() ~ 1)) %>%
+  bold_labels()
+
+tbl_merge(list(no_immune_data, have_immune_data), tab_spanner = c("no_immune_data", "have_immune_data"))
+```
+
+```{r Clean pop}
+markers_ROI <- markers_ROI %>% filter(casecon == "Control" |
+                                        !is.na(percent_CD3_total.i) | 
+                                        !is.na(percent_CD3_total.p))
+```
+
+### From here, the analysis include only control patients and cases with immune data patients.
+
+## 1. Patient characteristics
+```{r patient table}
+markers_ROI %>% 
+  select(diagyear, refage, refage_cat, 
+         histotype, histotype1, histotype2,
+        casecon) %>% 
+  tbl_summary(by = casecon,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              digits = list(all_continuous() ~ 1)) %>%
+      # modify_header(list(label ~ "**Patient characteristics**", all_stat_cols() ~ "**{level}**, N = {n}")) %>% 
+  bold_labels()
+```
+
+## 1. Patient characteristics
+```{r patient table}
+markers_ROI %>% 
+  select(starts_with("CD"), immunoscore_2018lancet_patients) %>% 
+  tbl_summary(
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              digits = list(all_continuous() ~ 1)) %>%
+      # modify_header(list(label ~ "**Patient characteristics**", all_stat_cols() ~ "**{level}**, N = {n}")) %>% 
+  bold_labels()
+```
+
+# 3. Distribution of the potential inflammatory-related pre-diagnostic exposures in the overall study population and by immune abundance (only use overall intratumoral and overall peritumoral), immune signatures, and immunoscore
+
+## Summary table
+```{r exposures table}
+markers_ROI %>% 
+  select(smokever, smokcurrent,
+         packyrs, packyrs_cat, 
+         BMI_recent_grp, BMI_YA_grp, 
+         endomet, pid, fibroids,
+         talcever, talcgen, talcnongen,
+         diab, hrtdis, hbp, hchol,
+         aspirin, NSAID, aceta, 
+         inactive, paga, loc,
+         education,diidensity, diidenswithsupp,
+         perceived_discrim, phys_trust,
+         casecon) %>% 
+  tbl_summary(by = casecon,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              # label = list(refage ~ "Age at diagnosis", refage_cat ~ "Age at diagnosis category",
+              #              dblkstat_CA125 ~ "Debulking Status", adj ~ "Adjuvant chemotherapy",
+              #              smokcurrent ~ "Smoking status"),
+              # type = list(c(diab,
+              #   talcever, talcgen, talcnongen,
+              #               aspirin, NSAID,aceta, 
+              #               hyster, hyster1yr,
+              #               hyster2yr, hystertype,
+              #               tubelig, endomet, fibroids,
+              #               pid, education) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  # modify_header(list(label ~ "**Patient Exposure characteristics**", all_stat_cols() ~ "**{level}**, N = {n}")) %>% 
+  bold_labels()
+```
+
+## Intratumoral CD3 total - Overall pop
+```{r}
+markers_ROI %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(smokever, smokcurrent,
+         packyrs, packyrs_cat, 
+         BMI_recent_grp, BMI_YA_grp, 
+         endomet, pid, fibroids,
+         talcever, talcgen, talcnongen,
+         diab, hrtdis, hbp, hchol,
+         aspirin, NSAID, aceta, 
+         inactive, paga, loc,
+         education,diidensity, diidenswithsupp,
+         perceived_discrim, phys_trust,
+         CD3_total.i) %>% 
+  tbl_summary(by = CD3_total.i,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              # type = list(c(diab,
+              #   talcever, talcgen, talcnongen,
+              #               aspirin, NSAID,aceta,
+              #               hyster, hyster1yr,
+              #               hyster2yr, hystertype,
+              #               tubelig, endomet, fibroids,
+              #               pid, education) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+
+## Intratumoral CD3CD8 total - Overall pop
+```{r}
+markers_ROI %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(smokever, smokcurrent,
+         packyrs, packyrs_cat, 
+         BMI_recent_grp, BMI_YA_grp, 
+         endomet, pid, fibroids,
+         talcever, talcgen, talcnongen,
+         diab, hrtdis, hbp, hchol,
+         aspirin, NSAID, aceta, 
+         inactive, paga, loc,
+         education,diidensity, diidenswithsupp,
+         perceived_discrim, phys_trust,
+         CD3_CD8_total.i) %>% 
+  tbl_summary(by = CD3_CD8_total.i,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              # type = list(c(diab,
+              #   talcever, talcgen, talcnongen,
+              #               aspirin, NSAID,aceta,
+              #               hyster, hyster1yr,
+              #               hyster2yr, hystertype,
+              #               tubelig, endomet, fibroids,
+              #               pid, education) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+
+## Intratumoral Immunoscore - Overall pop
+```{r}
+markers_ROI %>% 
+  distinct(suid, .keep_all = TRUE) %>% 
+  select(smokever, smokcurrent,
+         packyrs, packyrs_cat, 
+         BMI_recent_grp, BMI_YA_grp, 
+         endomet, pid, fibroids,
+         talcever, talcgen, talcnongen,
+         diab, hrtdis, hbp, hchol,
+         aspirin, NSAID, aceta, 
+         inactive, paga, loc,
+         education,diidensity, diidenswithsupp,
+         perceived_discrim, phys_trust,
+         immunoscore_2018lancet_patients) %>% 
+  tbl_summary(by = immunoscore_2018lancet_patients,
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              # type = list(c(diab,
+              #   talcever, talcgen, talcnongen,
+              #               aspirin, NSAID,aceta,
+              #               hyster, hyster1yr,
+              #               hyster2yr, hystertype,
+              #               tubelig, endomet, fibroids,
+              #               pid, education) ~ "categorical"),
+              digits = list(all_continuous() ~ 1)
+  ) %>%
+  add_overall() %>% bold_labels() %>% add_p() %>% bold_p(t = .05) %>% as_gt()
+```
+
+```{r}
+exposure_var <- c("smokever", "smokcurrent",
+                  "packyrs", "packyrs_cat", 
+                  "BMI_recent_grp", "BMI_YA_grp", 
+                  "endomet", "pid", "fibroids",
+                  "talcever", "talcgen", "talcnongen",
+                  "diab", "hrtdis", "hbp", "hchol",
+                  "aspirin", "NSAID", "aceta", 
+                  "inactive", "paga", "loc",
+                  "education","diidensity", "diidenswithsupp",
+                  "perceived_discrim", "phys_trust"
+                  ) 
+```
+
+## Violin plots
+```{r violin}
+violin_plot <- function(data, type){
+
+  for (i in exposure_var){
+
+    if(class(markers_ROI[[i]]) == "factor" | class(markers_ROI[[i]]) == "character") {
+
+      p1 <- markers_ROI %>%
+        filter(!is.na(.data[[i]])) %>% 
+        ggplot()+
+        geom_violin(aes(x=.data[[i]], y= .data[[paste0(type, ".i")]]), scale = "count")+
+        geom_boxplot(aes(x=.data[[i]], y= .data[[paste0(type, ".i")]]), width=.1) +
+        theme_classic()+
+        labs(y=NULL, title="Intratumoral \nROIs")
+      p2 <- markers_ROI %>%
+        filter(!is.na(.data[[i]])) %>% 
+        ggplot()+
+        geom_violin(aes(x=.data[[i]], y= .data[[paste0(type, ".p")]]), scale = "count")+
+        geom_boxplot(aes(x=.data[[i]], y= .data[[paste0(type, ".p")]]), width=.1) +
+        theme_classic()+
+        labs(y=NULL, title="Peripheral \nROIs")
+
+      main <- str_match(type, "percent_(.*)_total")[,2]
+      gridExtra::grid.arrange(p1, p2, ncol = 2,
+                              top = "% of Cells Present in",
+                              left =  paste("Overall", main, "immune cells (%) per patients"),
+                              bottom = "Data on Race-Matched Patients")
+    }
+  }
+}
+```
+
+### CD3
+```{r}
+violin_plot(data = markers_ROI, type = "percent_CD3_total")
+```
+
+### CD3 CD8
+```{r}
+violin_plot(data = markers_ROI, type = "percent_CD3_CD8_total")
+```
+
+### CD3 FoxP3
+```{r}
+violin_plot(data = markers_ROI, type = "percent_CD3_FoxP3_total")
+```
+
+### C11b
+```{r}
+violin_plot(data = markers_ROI, type = "percent_CD11b_total")
+```
+
+### CD11b CD15
+```{r}
+violin_plot(data = markers_ROI, type = "percent_CD11b_CD15_total")
+```
+
+## Scatter plots
+```{r point}
+point_plot <- function(data, type){
+
+  for (i in exposure_var){
+
+    if(class(markers_ROI[[i]]) == "numeric" | class(markers_ROI[[i]]) == "integer") {
+
+      p1 <- markers_ROI %>%
+        ggplot(aes(x=.data[[i]], y= .data[[paste0(type, ".i")]]))+
+        geom_point()+
+        geom_smooth(method = "lm", se = FALSE)+
+        stat_regline_equation(label.y.npc = 1)+
+        theme_classic()+
+        labs(y=NULL, title="Intratumoral \nROIs")
+      p2 <- markers_ROI %>%
+        ggplot(aes(x=.data[[i]], y= .data[[paste0(type, ".p")]]))+
+        geom_point()+
+        geom_smooth(method = "lm", se = FALSE)+
+        stat_regline_equation(label.y.npc = 1)+
+        theme_classic()+
+        labs(y=NULL, title="Peripheral \nROIs")
+
+      main <- str_match(type, "percent_(.*)_total")[,2] %>%
+        str_remove(., "_")
+      gridExtra::grid.arrange(p1, p2, ncol = 2,
+                              top = "% of Cells Present in",
+                              left =  paste("Overall", main, "immune cells (%) per patients"),
+                              bottom = "Data on Race-Matched Patients")
+    }
+  }
+}
+```
+
+### CD3
+```{r}
+point_plot(data = markers_ROI, type = "percent_CD3_total")
+```
+
+### CD3 CD8
+```{r}
+point_plot(data = markers_ROI, type = "percent_CD3_CD8_total")
+```
+
+### CD3 FoxP3
+```{r}
+point_plot(data = markers_ROI, type = "percent_CD3_FoxP3_total")
+```
+
+### CD11b
+```{r}
+point_plot(data = markers_ROI, type = "percent_CD11b_total")
+```
+
+### CD11b CD15
+```{r}
+point_plot(data = markers_ROI, type = "percent_CD11b_CD15_total")
+```
+<br>
+<br>
+
+***
+***
+
+<br>
+
+# II. Logistic regression adjusted by age + site
+
+```{r log reg function}
+loreg_table_int <- function(data, type){
+  
+  for (i in exposure_var){
+    
+    main <- str_match(type, "(.*)_total")[,2] %>% 
+      str_remove(., "_")
+    
+    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
+                data = data, family = "binomial") %>%
+            tbl_regression(exponentiate = TRUE, 
+                           label = list(`data[[i]]` ~ i)) %>% 
+            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
+    print(tbl1)
+    
+  }
+}
+
+loreg_table_per <- function(data, type){
+
+  for (i in exposure_var){
+
+    main <- str_match(type, "(.*)_total")[,2] %>%
+      str_remove(., "_")
+
+    tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site, 
+                data = data, family = "binomial") %>%
+            tbl_regression(exponentiate = TRUE,
+                           label = list(`data[[i]]` ~ i)) %>%
+            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral"))
+    print(tbl2)
+
+  }
+}
+```
+
+## Overall
+
+### CD3_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r log reg intra, results = 'asis'}
+loreg_table_int(data = markers_ROI, type = "CD3_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r log reg periph, results = 'asis'}
+# loreg_table_per(data = markers_ROI, type = "CD3_total")
+```
+</div>
+</div>
+
+***
+
+### CD3_CD8_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI, type = "CD3_CD8_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI, type = "CD3_CD8_total")
+```
+</div>
+</div>
+
+***
+
+### CD3_FoxP3_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI, type = "CD3_FoxP3_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI, type = "CD3_FoxP3_total")
+```
+</div>
+</div>
+
+***
+
+### CD11b_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI, type = "CD11b_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI, type = "CD11b_total")
+```
+</div>
+</div>
+
+***
+
+### CD11b_CD15_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+loreg_table_int(data = markers_ROI, type = "CD11b_CD15_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_per(data = markers_ROI, type = "CD11b_CD15_total")
+```
+</div>
+</div>
+
+<br>
+
+***
+***
+
+<br>
+
+<!-- ## Immunoscore -->
+
+```{r multi reg function}
+multinom_pivot_wider <- function(x) {
+  # check inputs match expectatations
+  if (!inherits(x, "tbl_regression") || !inherits(x$model_obj, "multinom")) {
+    stop("`x=` must be class 'tbl_regression' summary of a `nnet::multinom()` model.")
+  }
+
+  # create tibble of results
+  df <- tibble::tibble(outcome_level = unique(x$table_body$groupname_col))
+  df$tbl <-
+    purrr::map(
+      df$outcome_level,
+      function(lvl) {
+        gtsummary::modify_table_body(
+          x,
+          ~dplyr::filter(.x, .data$groupname_col %in% lvl) %>%
+            dplyr::ungroup() %>%
+            dplyr::select(-.data$groupname_col)
+        )
+      }
+    )
+
+  tbl_merge(df$tbl, tab_spanner = paste0("**", df$outcome_level, "**"))
+}
+
+multireg_table_int <- function(data){
+
+  for (i in exposure_var){
+
+    tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
+                     data = data) %>%
+            tbl_regression(exponentiate = TRUE,
+                           label = list(`data[[i]]` ~ i)) %>%
+  multinom_pivot_wider() #%>%
+            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral"))
+    print(tbl1)
+
+  }
+}
+
+multireg_table_per <- function(data, type){
+
+  for (i in exposure_var){
+
+    tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
+                     data = data) %>%
+            tbl_regression(exponentiate = TRUE,
+                           label = list(`data[[i]]` ~ i)) %>%
+  multinom_pivot_wider()# %>%
+            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Peripheral"))
+    print(tbl2)
+
+  }
+}
+```
+<!-- Intratumoral -->
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+
+# model <- multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_ROI)
+# broom::tidy(model)
+# exp(coef(model))
+# multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_ROI) %>%
+#   tbl_regression(exponentiate = TRUE) %>%
+#   multinom_pivot_wider()
+
+# multireg_table_int(data = markers_ROI)
+```
+</div>
+
+<!-- Peripheral  -->
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# multireg_table_per(data = markers_ROI)
+```
+</div>
+</div>
+
+# Immunoscore 3 cat 2018lancet
+
+What are the weight?
+```{r}
+multinom(immunoscore_2018lancet_patients ~ immunoscore_2018lancet_patients + refage + site,
+                     data = markers_ROI)
+```
+
+```{r multi reg}
+multireg_table_int <- function(data){
+
+  for (i in exposure_var){
+
+    tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
+                     data = data) %>%
+            tbl_regression(exponentiate = TRUE,
+                           label = list(`data[[i]]` ~ i)) %>%
+  multinom_pivot_wider()# %>%
+            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral"))
+    print(tbl1)
+
+  }
+}
+
+multireg_table_per <- function(data){
+
+  for (i in exposure_var){
+
+    tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
+                     data = data) %>%
+            tbl_regression(exponentiate = TRUE,
+                           label = list(`data[[i]]` ~ i)) %>%
+  multinom_pivot_wider()# %>%
+            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Peripheral"))
+    print(tbl2)
+
+  }
+}
+```
+
+## Overall
+
+### Intratumoral
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+multireg_table_int(data = markers_ROI)
+```
+</div>
+
+### Peripheral
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+multireg_table_per(data = markers_ROI)
+```
+</div>
+</div>
+
+<br>
+
+***
+***
+
+<br>
+<br>
+
+# III. Risk assessement
+## Overall population
+```{r dummy}
+markers_ROI <- markers_ROI %>% 
+  mutate_at(c("CD3_tumor.i", "CD3_total.i", "CD3_stroma.i", 
+              "CD3_CD8_tumor.i", "CD3_CD8_total.i", "CD3_CD8_stroma.i"), 
+            ~ case_when(
+              is.na(.)                                               ~ 0,
+              . == "low"                                             ~ 1,
+              . == "high"                                            ~ 2,
+            ))
+
+ctrl_case <- dummy_cols(markers_ROI, 
+                        select_columns = 
+                          c(#"smokever", 
+                            "smokcurrent",
+                            "packyrs_cat"#,
+                            # "BMI_YA_2grp",
+                            # "endomet", "pid", "fibroids",
+                            # "talcever", "talcgen", "talcnongen",
+                            # "diab", "hrtdis", "hbp", "hchol",
+                            # "aspirin", "NSAID", "aceta",
+                            # "inactive", "paga",
+                            # "education"
+                            ))
+
+colnames(ctrl_case)
+```
+
+### 2 levels factor variable
+```{r 2 levels factor variable}
+factor_name <- c("smokever", 
+                 "endomet", "pid", "fibroids",
+                 "talcever", "talcgen", "talcnongen",
+                 "diab", "hrtdis", "hbp", "hchol",
+                 "aspirin", "NSAID", "aceta",
+                 "inactive", "paga",
+                 "education",
+                 "diidensity", "diidenswithsupp",
+                 "perceived_discrim", "phys_trust",
+                 "BMI_YA_2grp")
+
+risk_ass <- function(data, type){
+
+  for (i in factor_name){
+
+    print(paste("RISK ASSESSMENT FOR ->", i, ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "site", i), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+  }
+}
+```
+
+#### CD3_tumor.i
+```{r}
+risk_ass(data = ctrl_case, type = "CD3_tumor.i")
+```
+#### CD3_total.i
+```{r}
+risk_ass(data = ctrl_case, type = "CD3_total.i")
+```
+#### CD3_stroma.i
+```{r}
+risk_ass(data = ctrl_case, type = "CD3_stroma.i")
+```
+#### CD3_CD8_tumor.i
+```{r}
+risk_ass(data = ctrl_case, type = "CD3_CD8_tumor.i")
+```
+#### CD3_CD8_total.i
+```{r}
+risk_ass(data = ctrl_case, type = "CD3_CD8_total.i")
+```
+#### CD3_CD8_stroma.i
+```{r}
+risk_ass(data = ctrl_case, type = "CD3_CD8_stroma.i")
+```
+
+### 3 levels factor variable - smokcurrent
+```{r 3 levels factor variable - smokcurrent}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "smokcurrent_current", "smokcurrent_former", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "site", "smokcurrent_current", "smokcurrent_former"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "smokcurrent", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "smokcurrent",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_tumor.i")
+```
+#### CD3_total.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_total.i")
+```
+#### CD3_stroma.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_stroma.i")
+```
+#### CD3_CD8_tumor.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_CD8_tumor.i")
+```
+#### CD3_CD8_total.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_CD8_total.i")
+```
+#### CD3_CD8_stroma.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_CD8_stroma.i")
+```
+
+### 3 levels factor variable - packyrs_cat
+```{r 3 levels factor variable - packyrs_cat}
+risk_ass_bmi <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "packyrs_cat_inf_eq_15", "packyrs_cat_sup_15", ":"))
+    risk <- eh_test_subtype(label = type, 
+                M = 2, 
+                factors = list("refage", "site", "packyrs_cat_inf_eq_15", "packyrs_cat_sup_15"), 
+                data = data)
+
+    print(risk[["or_ci_p"]])
+    
+    print(paste("OVERALL PVAL FOR ->", "packyrs_cat", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "packyrs_cat",
+                        nlevels = 3))
+}
+```
+
+#### CD3_tumor.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_tumor.i")
+```
+#### CD3_total.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_total.i")
+```
+#### CD3_stroma.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_stroma.i")
+```
+#### CD3_CD8_tumor.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_CD8_tumor.i")
+```
+#### CD3_CD8_total.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_CD8_total.i")
+```
+#### CD3_CD8_stroma.i
+```{r}
+risk_ass_bmi(data = ctrl_case, type = "CD3_CD8_stroma.i")
+```
+<br>
+<br>
+
+***
+
+# Secondary analysis
+## Distribution
+```{r distribution, fig.height=12, fig.width=12}
+markers_ROI %>% 
+  select(starts_with("percent_CD3"), starts_with("percent_CD11b")) %>% 
+  pivot_longer(cols = everything()) %>% 
+  mutate(region = case_when(
+    str_detect(name, ".i")           ~ "intratumoral",
+    str_detect(name, ".p")           ~ "peripheral"
+  )) %>% 
+  mutate(compartment = case_when(
+    str_detect(name, "tumor")           ~ "tumor",
+    str_detect(name, "stroma")           ~ "stroma",
+    str_detect(name, "total")           ~ "total"
+  )) %>% 
+  mutate(marker = str_match(name, "percent_(.*)(_total|_tumor|_stroma)")[,2]) %>% 
+  ggplot(aes(value, color= compartment, fill= compartment))+
+  geom_density(alpha=.5)+
+  theme_classic()+
+  facet_wrap(region ~ marker, scales = "free", nrow = 2) +
+  theme(legend.position="bottom")
+```
+
+## Glm
+```{r glm function}
+glm_table_int <- function(data, type){
+  
+  for (i in exposure_var){
+    
+    main <- str_match(type, "(.*)_total")[,2] %>% 
+      str_replace(., "_", " ")
+    
+    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
+                data = data) %>%
+            tbl_regression(exponentiate = TRUE, 
+                           label = list(`data[[i]]` ~ i)) %>% 
+            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
+    print(tbl1)
+    
+  }
+}
+```
+## Overall
+
+### CD3_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r glm intra, results = 'asis'}
+glm_table_int(data = markers_ROI, type = "percent_CD3_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r glm periph, results = 'asis'}
+# glm_table_(data = markers_ROI, type = "CD3_total")
+```
+</div>
+</div>
+
+***
+
+### CD3_CD8_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+glm_table_int(data = markers_ROI, type = "CD3_CD8_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# glm_table_(data = markers_ROI, type = "CD3_CD8_total")
+```
+</div>
+</div>
+
+***
+
+### CD3_FoxP3_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+glm_table_int(data = markers_ROI, type = "CD3_FoxP3_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# glm_table_(data = markers_ROI, type = "CD3_FoxP3_total")
+```
+</div>
+</div>
+
+***
+
+### CD11b_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+glm_table_int(data = markers_ROI, type = "CD11b_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# glm_table_(data = markers_ROI, type = "CD11b_total")
+```
+</div>
+</div>
+
+***
+
+### CD11b_CD15_total
+
+<div class = "row">
+<div class = "col-md-6">
+```{r, results = 'asis'}
+glm_table_int(data = markers_ROI, type = "CD11b_CD15_total")
+```
+</div>
+
+<div class = "col-md-6">
+```{r, results = 'asis'}
+# loreg_table_(data = markers_ROI, type = "CD11b_CD15_total")
+```
+</div>
+</div>
+
+<br>
+
+***
+***
+
+
+***
+
+
+
