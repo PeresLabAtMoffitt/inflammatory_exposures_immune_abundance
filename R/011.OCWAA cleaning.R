@@ -20,6 +20,18 @@ clinical_OCWAA <- clinical_OCWAA %>%
     casecon == 1                                       ~ "Case",
     casecon == 2                                       ~ "Control"
   )) %>% 
+  mutate(site = case_when(
+    site == "IL" |
+      site == "MI"                                     ~ "IL+MI",
+    site == "GA" |
+      site == "TN"                                     ~ "GA+TN",
+    TRUE                                               ~ site
+  )) %>% 
+  mutate(diagyear = case_when(
+    diagyear == 2010 |
+      diagyear == 2011                                 ~ "2010-2011",
+    TRUE                                               ~ as.character(diagyear)
+  )) %>% 
   mutate(refage_cat = case_when(
     refage < 50                      ~ "<50",
     refage >= 50 &
@@ -70,7 +82,7 @@ clinical_OCWAA <- clinical_OCWAA %>%
     education == "high school graduate/GED or less"|
       education == "some college"                     ~ "didn't graduated",
     education == "college graduate"|
-      education == "graduate/professional"            ~ "graduated"
+      education == "graduate/professional school"     ~ "graduated"
   )) %>% 
   mutate(education = factor(education, levels = c("graduated", "didn't graduated"))) %>% 
   mutate(hysterreason = case_when(
@@ -113,8 +125,8 @@ clinical_OCWAA <- clinical_OCWAA %>%
             )) %>% 
   mutate_at(c("pregever",
               "nulliparous", "hyster", "hyster1yr", "hyster2yr", "hystertype",
-              "tubelig", "tubelig1yr", "ocever", "talcever", "talcgen",
-              "talcnongen", "famhxbr", "famhxov", "endomet", "fibroids",
+              "tubelig", "tubelig1yr", "ocever", "talcever",
+              "famhxbr", "famhxov", "endomet", "fibroids",
               "pid", "aspirin", "NSAID", "aceta", "diab", "hrtdis", "hbp",
               "hchol", "paga"), 
             ~ case_when(
@@ -122,7 +134,32 @@ clinical_OCWAA <- clinical_OCWAA %>%
               . == 2                                              ~ "NO",
               TRUE                                                ~ NA_character_
             )) %>% 
-  
+  mutate(talcgen = case_when(
+    talcever == "NO"                                          ~ "never",
+    talcgen == 1                                              ~ "talc user applied to only genital areas",
+    talcgen == 2                                              ~ "talc user applied to other non-genital areas",
+    TRUE                                                      ~ as.character(talcgen)
+  )) %>% 
+  mutate(talcnongen = case_when(
+    talcever == "NO"                                          ~ "never",
+    talcnongen == 1                                           ~ "talc user applied only to non-genital areas",
+    talcnongen == 2                                           ~ "talc user applied to other areas",
+    TRUE                                                      ~ as.character(talcnongen)
+  )) %>% 
+  mutate(ctrl_loc = case_when(
+    casecon == "Control"               ~ loc,
+    TRUE                               ~ NA_real_
+  )) %>% 
+  mutate(tertile33 = quantile(ctrl_loc, probs = c(0.333, 0.666), na.rm = TRUE)[1]
+  ) %>% 
+  mutate(tertile66 = quantile(ctrl_loc, probs = c(0.333, 0.666), na.rm = TRUE)[2]
+  ) %>% 
+  mutate(tertile_loc = case_when(
+    loc < tertile33           ~ "Low",
+    loc >= tertile33 &
+      loc < tertile66         ~ "Medium",
+    loc >= tertile66          ~ "High",
+  )) %>% 
   mutate(BMI_recent_grp = case_when(
     BMI_recent < 25                  ~ "<25",
     BMI_recent >= 25 &
@@ -144,14 +181,14 @@ clinical_OCWAA <- clinical_OCWAA %>%
   mutate(BMI_YA_2grp = case_when(
     BMI_YA < 30                      ~ "inf-30",
     BMI_YA >= 30                     ~ "sup-eq-30"
-  ))
+  )) %>% 
+  select(-c(tertile_loc, tertile33, tertile66))
   
 write_rds(clinical_OCWAA, "clinical_OCWAA.rds")
 
 
 ###################################################################### II ### Markers
 markers <- markers %>% 
-  filter(slide_type == "ROI") %>% 
   # Remove bad slides
   filter(!image_tag %in% c("Peres_P1_150163  3D_[44113,18531].tif", 
                            "Peres_P1_43004 A2_[45654,5840].tif",
@@ -168,7 +205,7 @@ markers <- markers %>%
 
 suid_summarize <- function(data){
   data <- data %>% 
-    group_by(suid) %>% 
+    group_by(suid, slide_type) %>% 
     summarize(
       mean_tumor = mean(percent_tumor),
       mean_stroma = mean(percent_stroma),
@@ -199,25 +236,34 @@ suid_summarize <- function(data){
     )
 }
 
+markers_TMA <- markers %>% 
+  filter(slide_type == "TMA")
+  
 markers_ROIi <- markers %>% 
   filter(annotation == "Intratumoral")
 markers_ROIp <- markers %>% 
   filter(annotation == "Peripheral")
 
+markers_TMA <- suid_summarize(markers_TMA)
 markers_ROIi <- suid_summarize(markers_ROIi)
 markers_ROIp <- suid_summarize(markers_ROIp)
 
 
 ###################################################################### III ### Merge
+colnames(markers_TMA)[2:ncol(markers_TMA)] <- paste(
+  colnames(markers_TMA)[2:ncol(markers_TMA)], "tma", sep = "_")
 # Join Intratumoral and Peropheral ROI
-markers_ROI <- full_join(markers_ROIi, markers_ROIp,
-                         by= "suid", suffix= c(".i", ".p"))
+markers <- full_join(markers_ROIi, markers_ROIp,
+                         by= c("suid", "slide_type"),
+                         suffix= c(".i", ".p")) %>% 
+  full_join(., markers_TMA, 
+            by= "suid")
 
-write_rds(markers_ROI, file = "markers_ROI_allAACES_OCWAA.rds")
+write_rds(markers, file = "markers_AACES_06172022.rds")
 
-OCWAA_markers <- full_join(markers_ROI, clinical_OCWAA, by = "suid")
+OCWAA_markers <- full_join(markers, clinical_OCWAA, by = "suid")
 
-write_rds(OCWAA_markers, file = "markers_clinical_ROI_allAACES_OCWAA.rds")
+write_rds(OCWAA_markers, file = "markers_AACES_clinical_OCWAA.rds")
 
 
 # END

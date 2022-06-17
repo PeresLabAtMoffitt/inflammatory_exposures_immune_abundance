@@ -1,5 +1,5 @@
 ---
-title: "Investigate data"
+title: "Investigating the association of inflammatory-related exposures and risk of epithelial ovarian cancer by tumor immune profiles"
 author: "Christelle Colin-Leitzinger"
 date: "`r Sys.Date()`"
 output: 
@@ -453,6 +453,7 @@ loreg_table_int <- function(data, type){
     tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
                 data = data, family = "binomial") %>%
             tbl_regression(exponentiate = TRUE, 
+                           intercept = TRUE,
                            label = list(`data[[i]]` ~ i)) %>% 
             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
     print(tbl1)
@@ -470,6 +471,7 @@ loreg_table_per <- function(data, type){
     tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site, 
                 data = data, family = "binomial") %>%
             tbl_regression(exponentiate = TRUE,
+                           intercept = TRUE,
                            label = list(`data[[i]]` ~ i)) %>%
             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral"))
     print(tbl2)
