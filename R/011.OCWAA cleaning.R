@@ -21,12 +21,21 @@ clinical_OCWAA <- clinical_OCWAA %>%
     casecon == 2                                       ~ "Control"
   )) %>% 
   mutate(site = case_when(
-    site == "IL" |
-      site == "MI"                                     ~ "IL+MI",
+    site == "BA" |
+      site == "LA" |
+      site == "AL"                                     ~ "South Central",
     site == "GA" |
-      site == "TN"                                     ~ "GA+TN",
+      site == "NC" |
+      site == "SC" |
+      site == "TN"                                     ~ "South/Mid-Atlantic",
+    site == "OH" |
+      site == "NJ" |
+      site == "IL" |
+      site == "MI"                                     ~ "North",
     TRUE                                               ~ site
-  )) %>% 
+  ), site = factor(site, levels = c("South/Mid-Atlantic", "South Central",
+                                    "North"))
+  ) %>% 
   mutate(diagyear = case_when(
     diagyear == 2010 |
       diagyear == 2011                                 ~ "2010-2011",
@@ -121,19 +130,25 @@ clinical_OCWAA <- clinical_OCWAA %>%
             ~ case_when(
               . %in% c("88","98", "99", 
                        "888", "998", "999")            ~ NA_real_,
-              TRUE                                     ~ as.numeric(.)
-            )) %>% 
+              TRUE                                     ~ as.numeric(.))
+  ) %>% 
   mutate_at(c("pregever",
               "nulliparous", "hyster", "hyster1yr", "hyster2yr", "hystertype",
               "tubelig", "tubelig1yr", "ocever", "talcever",
               "famhxbr", "famhxov", "endomet", "fibroids",
               "pid", "aspirin", "NSAID", "aceta", "diab", "hrtdis", "hbp",
-              "hchol", "paga"), 
+              "hchol", "paga"),
             ~ case_when(
               . == 1                                              ~ "YES",
               . == 2                                              ~ "NO",
               TRUE                                                ~ NA_character_
             )) %>% 
+  mutate(talcever = factor(talcever, levels = c("NO","YES")), 
+         aceta = factor(aceta, levels = c("NO","YES")),
+         tubelig = factor(tubelig, levels = c("NO","YES")),
+         hrtdis = factor(hrtdis, levels = c("NO","YES")),
+         hbp = factor(hbp, levels = c("NO","YES")),
+  ) %>% 
   mutate(talcgen = case_when(
     talcever == "NO"                                          ~ "never",
     talcgen == 1                                              ~ "talc user applied to only genital areas",
@@ -152,6 +167,23 @@ clinical_OCWAA <- clinical_OCWAA %>%
                                                 "talc user applied only to non-genital areas",
                                                 "talc user applied to other areas"))
   ) %>% 
+  mutate(fullpregnum = case_when(
+    pregever == 2                            ~ "no pregnancies",
+    fullpregnum <= 2                         ~ "1-2",
+    fullpregnum > 2                          ~ "3+"
+  )) %>% 
+  mutate(ocdur = case_when(
+    ocever == 2                              ~ "never user",
+    ocdur <= 5                               ~ ">0-5 years",
+    ocdur > 5                                ~ "5+ years"
+  )) %>% 
+  mutate(famhist_br_ov = case_when(
+    famhxbr == "YES" |
+      famhxov == "YES"                       ~ "YES",
+    famhxbr == "NO" &
+      famhxov == "NO"                        ~ "NO"
+  ), famhist_br_ov = factor(famhist_br_ov, levels = c("NO","YES"))
+  ) %>% 
   mutate(ctrl_loc = case_when(
     casecon == "Control"               ~ loc,
     TRUE                               ~ NA_real_
@@ -166,29 +198,43 @@ clinical_OCWAA <- clinical_OCWAA %>%
       loc < tertile66         ~ "Medium",
     loc >= tertile66          ~ "High",
   )) %>% 
+  mutate(ctrl_diidensity = case_when(
+    casecon == "Control"               ~ diidensity,
+    TRUE                               ~ NA_real_
+  )) %>% 
+  mutate(tertile33 = quantile(ctrl_diidensity, probs = c(0.333, 0.666), na.rm = TRUE)[1]
+  ) %>% 
+  mutate(tertile66 = quantile(ctrl_diidensity, probs = c(0.333, 0.666), na.rm = TRUE)[2]
+  ) %>% 
+  mutate(tertile_diidensity = case_when(
+    diidensity < tertile33           ~ "Low",
+    diidensity >= tertile33 &
+      diidensity < tertile66         ~ "Medium",
+    diidensity >= tertile66          ~ "High",
+  )) %>% 
+  
+  
   mutate(BMI_recent_grp = case_when(
-    BMI_recent < 25                  ~ "<25",
+    BMI_recent < 25                  ~ "inf_25",
     BMI_recent >= 25 &
-      BMI_recent < 30                ~ "25-29",
-    BMI_recent >= 30 &
-      BMI_recent < 35                ~ "30-35",
-    BMI_recent >= 35                 ~ "≥35"
+      BMI_recent < 30                ~ "25_29",
+    BMI_recent >= 30                 ~ "sup_eq_30"
   )) %>% 
-  mutate(BMI_recent_grp = factor(BMI_recent_grp, levels = c("<25", "25-29", "30-35", "≥35"))) %>% 
+  mutate(BMI_recent_grp = factor(BMI_recent_grp, levels = c("inf_25", "25_29", "sup_eq_30"))) %>% 
   mutate(BMI_YA_grp = case_when(
-    BMI_YA < 20                      ~ "<20",
+    BMI_YA < 20                      ~ "inf_20",
     BMI_YA >= 20 &
-      BMI_YA < 25                    ~ "20-24",
-    BMI_YA >= 25                     ~ "≥25"
+      BMI_YA < 25                    ~ "20_24",
+    BMI_YA >= 25                     ~ "sup_eq_25"
   )) %>% 
-  mutate(BMI_YA_grp = factor(BMI_YA_grp, levels = c("<20", "20-24", "≥25"))) %>% 
+  mutate(BMI_YA_grp = factor(BMI_YA_grp, levels = c("inf_20", "20_24", "sup_eq_25"))) %>% 
   mutate(BMI_recent_5 = BMI_recent / 5) %>% 
   mutate(BMI_YA_5 = BMI_YA / 5) %>% 
   mutate(BMI_YA_2grp = case_when(
     BMI_YA < 30                      ~ "inf-30",
     BMI_YA >= 30                     ~ "sup-eq-30"
   )) %>% 
-  select(-c(tertile33, tertile66))
+  select(-c(ctrl_loc, ctrl_diidensity, tertile33, tertile66))
   
 write_rds(clinical_OCWAA, "clinical_OCWAA.rds")
 
