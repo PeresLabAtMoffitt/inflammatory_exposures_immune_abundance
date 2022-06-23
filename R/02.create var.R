@@ -1,3 +1,6 @@
+# Import libtary
+library(tidyverse)
+
 OCWAA_markers <- readRDS(paste0(here::here(), "/markers_AACES_clinical_OCWAA.rds"))
 ###################################################################### Create category and new var
 OCWAA_markers <- OCWAA_markers %>% 
@@ -191,15 +194,21 @@ OCWAA_markers <- OCWAA_markers %>%
   mutate(BMI_recent_5 = BMI_recent / 5) %>% 
   mutate(BMI_YA_5 = BMI_YA / 5)
 
-
-OCWAA_markers <- OCWAA_markers %>% 
-  mutate(percentile_score_CD3_i = ntile(percent_CD3_total.i, 100) ) %>% ################################################
-  mutate(percentile_score_CD3_p = ntile(percent_CD3_total.p, 100) ) %>% 
-  mutate(percentile_score_CD8_i = ntile(percent_CD8_total.i, 100) ) %>% 
-  mutate(percentile_score_CD8_p = ntile(percent_CD8_total.p, 100) ) 
-OCWAA_markers <- OCWAA_markers %>%
-  mutate(percentile_score_mean = rowMeans(OCWAA_markers[c("percentile_score_CD3_i", "percentile_score_CD3_p", 
-                                                         "percentile_score_CD8_i", "percentile_score_CD8_p")] ))
+# It is a problem with using ntile within the pipes so use it 
+OCWAA_markers$percentile_score_CD3_i <- ntile(as.numeric(OCWAA_markers$percent_CD3_total.i), 100)
+OCWAA_markers$percentile_score_CD3_p <- ntile(as.numeric(OCWAA_markers$percent_CD3_total.p), 100)
+OCWAA_markers$percentile_score_CD8_i <- ntile(as.numeric(OCWAA_markers$percent_CD8_total.i), 100)
+OCWAA_markers$percentile_score_CD8_p <- ntile(as.numeric(OCWAA_markers$percent_CD8_total.p), 100)
+OCWAA_markers$percentile_score_mean <- rowMeans(OCWAA_markers[c("percentile_score_CD3_i", "percentile_score_CD3_p", 
+                                                                "percentile_score_CD8_i", "percentile_score_CD8_p")] )
+# OCWAA_markers <- OCWAA_markers %>% 
+#   mutate(percentile_score_CD3_i = ntile(percent_CD3_total.i, 100) ) %>%
+#   mutate(percentile_score_CD3_p = ntile(percent_CD3_total.p, 100) ) %>% 
+#   mutate(percentile_score_CD8_i = ntile(percent_CD8_total.i, 100) ) %>% 
+#   mutate(percentile_score_CD8_p = ntile(percent_CD8_total.p, 100) ) 
+# OCWAA_markers <- OCWAA_markers %>%
+#   mutate(percentile_score_mean = rowMeans(OCWAA_markers[c("percentile_score_CD3_i", "percentile_score_CD3_p", 
+#                                                          "percentile_score_CD8_i", "percentile_score_CD8_p")] ))
 OCWAA_markers <- OCWAA_markers %>%
   # mutate(immunoscore_patients = case_when(
   #   percentile_score_mean <= 10        ~ 0,
@@ -219,3 +228,4 @@ OCWAA_markers <- OCWAA_markers %>%
 
 write_rds(OCWAA_markers, "OCWAA_markers_category.rds")
 
+# END Create var

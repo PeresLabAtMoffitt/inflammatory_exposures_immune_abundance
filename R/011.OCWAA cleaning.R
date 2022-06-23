@@ -138,14 +138,20 @@ clinical_OCWAA <- clinical_OCWAA %>%
     talcever == "NO"                                          ~ "never",
     talcgen == 1                                              ~ "talc user applied to only genital areas",
     talcgen == 2                                              ~ "talc user applied to other non-genital areas",
-    TRUE                                                      ~ as.character(talcgen)
-  )) %>% 
+    TRUE                                                      ~ NA_character_
+  ), talcgen = factor(talcgen, levels = c("never",
+                                          "talc user applied to only genital areas",
+                                          "talc user applied to other non-genital areas"))
+  ) %>% 
   mutate(talcnongen = case_when(
     talcever == "NO"                                          ~ "never",
     talcnongen == 1                                           ~ "talc user applied only to non-genital areas",
     talcnongen == 2                                           ~ "talc user applied to other areas",
-    TRUE                                                      ~ as.character(talcnongen)
-  )) %>% 
+    TRUE                                                      ~ NA_character_
+  ), talcnongen = factor(talcnongen, levels = c("never",
+                                                "talc user applied only to non-genital areas",
+                                                "talc user applied to other areas"))
+  ) %>% 
   mutate(ctrl_loc = case_when(
     casecon == "Control"               ~ loc,
     TRUE                               ~ NA_real_
@@ -182,7 +188,7 @@ clinical_OCWAA <- clinical_OCWAA %>%
     BMI_YA < 30                      ~ "inf-30",
     BMI_YA >= 30                     ~ "sup-eq-30"
   )) %>% 
-  select(-c(tertile_loc, tertile33, tertile66))
+  select(-c(tertile33, tertile66))
   
 write_rds(clinical_OCWAA, "clinical_OCWAA.rds")
 
@@ -250,14 +256,17 @@ markers_ROIp <- suid_summarize(markers_ROIp)
 
 
 ###################################################################### III ### Merge
-colnames(markers_TMA)[2:ncol(markers_TMA)] <- paste(
-  colnames(markers_TMA)[2:ncol(markers_TMA)], "tma", sep = "_")
+colnames(markers_TMA)[3:ncol(markers_TMA)] <- paste(
+  colnames(markers_TMA)[3:ncol(markers_TMA)], "tma", sep = "_")
 # Join Intratumoral and Peropheral ROI
 markers <- full_join(markers_ROIi, markers_ROIp,
                          by= c("suid", "slide_type"),
                          suffix= c(".i", ".p")) %>% 
   full_join(., markers_TMA, 
-            by= "suid")
+            by= c("suid")) %>% 
+  unite("slide_type", c(slide_type.x, slide_type.y), 
+        sep = " + ",
+        remove = FALSE, na.rm = TRUE)
 
 write_rds(markers, file = "markers_AACES_06172022.rds")
 
