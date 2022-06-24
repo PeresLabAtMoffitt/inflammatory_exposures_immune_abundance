@@ -67,7 +67,7 @@ library(riskclustr)
 ```
 
 ```{r load}
-markers <- readRDS(paste0(here::here(), "/OCWAA_markers_category.rds")) %>% 
+OCWAA_markers <- readRDS(paste0(here::here(), "/OCWAA_markers_category.rds")) %>% 
   select(suid, slide_type, casecon, everything()) %>% 
   ungroup() %>% 
   # Filter AACES patients
@@ -76,7 +76,7 @@ markers <- readRDS(paste0(here::here(), "/OCWAA_markers_category.rds")) %>%
 ```
 
 ```{r}
-var_label(markers) <- list(refage ~ "Age at diagnosis", refage_cat ~ "Age at diagnosis category",
+var_label(OCWAA_markers) <- list(refage ~ "Age at diagnosis", refage_cat ~ "Age at diagnosis category",
                            smokcurrent ~ "Smoking status"
 ) 
 ```
@@ -85,7 +85,7 @@ var_label(markers) <- list(refage ~ "Age at diagnosis", refage_cat ~ "Age at dia
 # I. Data exploration
 ## 1. Compare patient characteristics for patients with vs. without immune data (Case only)
 ```{r Compare patient}
-markers %>%
+OCWAA_markers %>%
   filter(casecon == "Case") %>%
   mutate(have_immune_data = case_when(
     !is.na(slide_type)                   ~ "Have immune data",
@@ -114,7 +114,7 @@ markers %>%
 
 ## 2. Compare patient characteristics for ROI vs. TMA (Case only with immune data)
 ```{r Compare ROI vs TMA}
-markers %>%
+OCWAA_markers %>%
   filter(casecon == "Case") %>%
   mutate(have_immune_data = case_when(
     !is.na(slide_type)                   ~ "Have immune data",
@@ -144,7 +144,7 @@ markers %>%
 ```
 
 ```{r Clean pop}
-markers <- markers %>% filter(casecon == "Control" | !is.na(slide_type))
+markers <- OCWAA_markers %>% filter(casecon == "Control" | !is.na(slide_type))
 ```
 
 ### From here, the analysis include control + case patients with immune data patients only.
@@ -436,23 +436,31 @@ exposure_var <- c("smokever", "smokcurrent",
 
 <br>
 
-# II. Risk assessement
+# II. Risk assessement adjusted by age + site
 I created the dummy variables.
 ```{r dummy}
 ctrl_case <- markers %>%
   mutate_at(c("CD3_tumor.i", "CD3_total.i", "CD3_stroma.i",
               "CD3_CD8_tumor.i", "CD3_CD8_total.i", "CD3_CD8_stroma.i"),
             ~ case_when(
-              is.na(.)                                               ~ 0,
+              casecon == "Control"                                   ~ 0,
               . == "low"                                             ~ 1,
               . == "high"                                            ~ 2,
+              is.na(.) ~ NA_real_
             )) %>%
   mutate_at(c("CD11b_tumor.i", "CD11b_total.i", "CD11b_stroma.i",
               "CD11b_CD15_tumor.i", "CD11b_CD15_total.i", "CD11b_CD15_stroma.i"),
             ~ case_when(
-              is.na(.)                                               ~ 0,
+              casecon == "Control"                                   ~ 0,
               . == "Absence"                                         ~ 1,
               . == "Presence"                                        ~ 2,
+            )) %>% 
+  mutate_at(c("immunoscore_2018lancet_patients"), 
+            ~ case_when(
+              casecon == "Control"                                   ~ 0,
+              . == "Low"                                             ~ 1,
+              . == "Intermediate"                                    ~ 2,
+              . == "High"                                            ~ 3
             ))
 
 ctrl_case <- dummy_cols(ctrl_case,
@@ -461,15 +469,7 @@ ctrl_case <- dummy_cols(ctrl_case,
                             "smokcurrent",
                             "packyrs_cat",
                             "tertile_loc",
-                            "tertile_diidensity",
-                            "immunoscore_2018lancet_patients"
-                            # "BMI_YA_2grp",
-                            # "endomet", "pid", "fibroids",
-                            # "talcever", "talcgen", "talcnongen",
-                            # "diab", "hrtdis", "hbp", "hchol",
-                            # "aspirin", "NSAID", "aceta",
-                            # "inactive", "paga",
-                            # "education"
+                            "tertile_diidensity"
                             ))
 
 colnames(ctrl_case)
@@ -553,6 +553,29 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+immuno_ctrl_case <- ctrl_case %>% 
+  filter(casecon == "Control" | slide_type_considered == "ROI")
+
+risk_ass <- function(data, type){
+
+  for (i in factor_name){
+
+    print(paste("RISK ASSESSMENT FOR ->", i, ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", i),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+  }
+}
+
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
+```
 
 ## 3 levels factor variable - smokcurrent
 ```{r 3 levels factor variable - smokcurrent}
@@ -622,6 +645,27 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+risk_ass <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "smokcurrent_current", "smokcurrent_former", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "smokcurrent_current", "smokcurrent_former"),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+    print(paste("OVERALL PVAL FOR ->", "smokcurrent", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "smokcurrent",
+                        nlevels = 3))
+}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
+```
 
 ## 3 levels factor variable - packyrs_cat
 ```{r 3 levels factor variable - packyrs_cat}
@@ -690,6 +734,27 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ### CD11b_CD15_stroma.i
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
+```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+risk_ass <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "packyrs_cat_inf_eq_15", "packyrs_cat_sup_15", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "packyrs_cat_inf_eq_15", "packyrs_cat_sup_15"),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+    print(paste("OVERALL PVAL FOR ->", "packyrs_cat", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "packyrs_cat",
+                        nlevels = 3))
+}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
 ```
 <br>
 <br>
@@ -762,6 +827,27 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+risk_ass <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "tertile_loc_Medium", "tertile_loc_High", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "tertile_loc_Medium", "tertile_loc_High"),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+    print(paste("OVERALL PVAL FOR ->", "tertile_loc", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "tertile_loc",
+                        nlevels = 3))
+}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
+```
 <br>
 <br>
 
@@ -833,76 +919,26 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
-<br>
-<br>
-
-## 3 levels factor variable - immunoscore_2018lancet_patients
-```{r 3 levels factor variable - immunoscore_2018lancet_patients}
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
 risk_ass <- function(data, type){
 
-    print(paste("RISK ASSESSMENT FOR ->", "immunoscore_2018lancet_patients_Intermediate", "immunoscore_2018lancet_patients_High", ":"))
+    print(paste("RISK ASSESSMENT FOR ->", "tertile_diidensity_Medium", "tertile_diidensity_High", ":"))
     risk <- eh_test_subtype(label = type,
-                M = 2,
-                factors = list("refage", "site", "immunoscore_2018lancet_patients_Intermediate", "immunoscore_2018lancet_patients_High"),
+                M = 3,
+                factors = list("refage", "site", "tertile_diidensity_Medium", "tertile_diidensity_High"),
                 data = data)
 
     print(risk[["or_ci_p"]])
 
-    print(paste("OVERALL PVAL FOR ->", "immunoscore_2018lancet_patients", ":"))
+    print(paste("OVERALL PVAL FOR ->", "tertile_diidensity", ":"))
 
     print(posthoc_factor_test(fit = risk,
-                        factor = "immunoscore_2018lancet_patients",
+                        factor = "tertile_diidensity",
                         nlevels = 3))
 }
-```
-
-### CD3_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_tumor.i")
-```
-### CD3_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_total.i")
-```
-### CD3_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_stroma.i")
-```
-### CD3_CD8_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_tumor.i")
-```
-### CD3_CD8_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_total.i")
-```
-### CD3_CD8_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_stroma.i")
-```
-### CD11b_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_tumor.i")
-```
-### CD11b_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_total.i")
-```
-### CD11b_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_stroma.i")
-```
-### CD11b_CD15_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_tumor.i")
-```
-### CD11b_CD15_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
-```
-### CD11b_CD15_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
 ```
 <br>
 <br>
@@ -975,6 +1011,27 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+risk_ass <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_recent_grp_25_29", "BMI_recent_grp_sup_eq_30", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "BMI_recent_grp_25_29", "BMI_recent_grp_sup_eq_30"),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+    print(paste("OVERALL PVAL FOR ->", "BMI_recent_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_recent_grp",
+                        nlevels = 3))
+}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
+```
 <br>
 <br>
 
@@ -1046,378 +1103,399 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
-<br>
-<br>
-
-***
-
-# III. Secondary analysis - Case only
-
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
 ```{r}
-markers <- markers %>% 
-  filter(casecon == "Case")
-```
+risk_ass <- function(data, type){
 
-## 1.Distribution
-```{r distribution, fig.height=12, fig.width=12}
-markers %>%
-  select(starts_with("percent_CD3"), starts_with("percent_CD11b")) %>%
-  pivot_longer(cols = everything()) %>%
-  mutate(region = case_when(
-    str_detect(name, ".i")           ~ "intratumoral",
-    str_detect(name, ".p")           ~ "peripheral",
-    str_detect(name, "_tma")         ~ "TMA",
-  )) %>%
-  mutate(compartment = case_when(
-    str_detect(name, "tumor")           ~ "tumor",
-    str_detect(name, "stroma")           ~ "stroma",
-    str_detect(name, "total")           ~ "total"
-  )) %>%
-  mutate(marker = str_match(name, "percent_(.*)(_total|_tumor|_stroma)")[,2]) %>%
-  ggplot(aes(value, color= compartment, fill= compartment))+
-  geom_density(alpha=.5)+
-  theme_classic()+
-  facet_wrap(region ~ marker, scales = "free", nrow = 3) +
-  theme(legend.position="bottom")
-```
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_YA_grp_20_24", "BMI_YA_grp_sup_eq_25", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "BMI_YA_grp_20_24", "BMI_YA_grp_sup_eq_25"),
+                data = data)
 
-## 2.Logistic regression on category variables adjusted by age + site
-Results are exponentiated.
+    print(risk[["or_ci_p"]])
 
-### 2 categories var
-```{r log reg function}
-loreg_table_int <- function(data, type){
-  
-  for (i in exposure_var){
-    
-    main <- str_match(type, "(.*)_total")[,2] %>% 
-      str_remove(., "_")
-    
-    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
-                data = data, family = "binomial") %>%
-            tbl_regression(exponentiate = TRUE, 
-                           intercept = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>% 
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
-    print(tbl1)
-    
-  }
+    print(paste("OVERALL PVAL FOR ->", "BMI_YA_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_YA_grp",
+                        nlevels = 3))
 }
-
-loreg_table_per <- function(data, type){
-
-  for (i in exposure_var){
-
-    main <- str_match(type, "(.*)_total")[,2] %>%
-      str_remove(., "_")
-
-    tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site, 
-                data = data, family = "binomial") %>%
-            tbl_regression(exponentiate = TRUE,
-                           intercept = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>%
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral"))
-    print(tbl2)
-
-  }
-}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
 ```
-
-#### CD3_total
-
-<div class = "row">
-<div class = "col-md-6">
-```{r log reg intra, results = 'asis'}
-loreg_table_int(data = markers, type = "CD3_total")
-```
-</div>
-
-<div class = "col-md-6">
-```{r log reg periph, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD3_total")
-```
-</div>
-</div>
-
-***
-
-#### CD3_CD8_total
-
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers, type = "CD3_CD8_total")
-```
-</div>
-
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD3_CD8_total")
-```
-</div>
-</div>
-
-***
-
-#### CD3_FoxP3_total
-
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers, type = "CD3_FoxP3_total")
-```
-</div>
-
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD3_FoxP3_total")
-```
-</div>
-</div>
-
-***
-
-#### CD11b_total
-
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers, type = "CD11b_total")
-```
-</div>
-
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD11b_total")
-```
-</div>
-</div>
-
-***
-
-#### CD11b_CD15_total
-
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers, type = "CD11b_CD15_total")
-```
-</div>
-
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD11b_CD15_total")
-```
-</div>
-</div>
-
-<br>
-
-***
-***
-
-<br>
-
-### Immunoscore 3 cat 2018-lancet
-
-```{r multi reg function}
-multinom_pivot_wider <- function(x) {
-  # check inputs match expectatations
-  if (!inherits(x, "tbl_regression") || !inherits(x$model_obj, "multinom")) {
-    stop("`x=` must be class 'tbl_regression' summary of a `nnet::multinom()` model.")
-  }
-
-  # create tibble of results
-  df <- tibble::tibble(outcome_level = unique(x$table_body$groupname_col))
-  df$tbl <-
-    purrr::map(
-      df$outcome_level,
-      function(lvl) {
-        gtsummary::modify_table_body(
-          x,
-          ~dplyr::filter(.x, .data$groupname_col %in% lvl) %>%
-            dplyr::ungroup() %>%
-            dplyr::select(-.data$groupname_col)
-        )
-      }
-    )
-
-  tbl_merge(df$tbl, tab_spanner = paste0("**", df$outcome_level, "**"))
-}
-
-multireg_table <- function(data){
-
-  for (i in exposure_var){
-
-    tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
-                     data = data) %>%
-            tbl_regression(exponentiate = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>%
-  multinom_pivot_wider() #%>%
-            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral"))
-    print(tbl1)
-
-  }
-}
-```
-
-What are the weight? Example: model immunoscore with BMI + age + site
-```{r}
-multinom(immunoscore_2018lancet_patients ~ BMI_recent_grp + refage + site,
-                     data = markers)
-```
-
-```{r multi reg}
-# multireg_table_int <- function(data){
-# 
-#   for (i in exposure_var){
-# 
-#     tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
-#                      data = data) %>%
-#             tbl_regression(exponentiate = TRUE,
-#                            label = list(`data[[i]]` ~ i)) %>%
-#   multinom_pivot_wider()# %>%
-#             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral"))
-#     print(tbl1)
-# 
-#   }
-# }
-# 
-# multireg_table_per <- function(data){
-# 
-#   for (i in exposure_var){
-# 
-#     tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
-#                      data = data) %>%
-#             tbl_regression(exponentiate = TRUE,
-#                            label = list(`data[[i]]` ~ i)) %>%
-#   multinom_pivot_wider()# %>%
-#             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Peripheral"))
-#     print(tbl2)
-# 
-#   }
-# }
-```
-
-```{r, results = 'asis'}
-multireg_table(data = markers)
-```
-<br>
-
-***
-***
-
 <br>
 <br>
 
-# 3. Logistic regression on Continuous variables adjusted by age + site
-
-```{r glm function}
-glm_table_int <- function(data, type){
-  
-  for (i in exposure_var){
-    
-    main <- str_match(type, "(.*)_total")[,2] %>% 
-      str_replace(., "_", " ")
-    
-    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
-                data = data) %>%
-            tbl_regression(exponentiate = TRUE, 
-                           label = list(`data[[i]]` ~ i)) %>% 
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
-    print(tbl1)
-    
-  }
-}
-```
-
-## CD3_total
-
-<div class = "row">
-<div class = "col-md-6">
-```{r glm intra, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD3_total")
-```
-</div>
-
-<div class = "col-md-6">
-```{r glm periph, results = 'asis'}
-# glm_table_(data = markers, type = "percent_CD3_total")
-```
-</div>
-</div>
-
 ***
 
-## CD3_CD8_total
+<!-- # III. Secondary analysis - Case only -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD3_CD8_total")
-```
-</div>
+<!-- ```{r} -->
+<!-- markers_cases <- markers %>%  -->
+<!--   filter(casecon == "Case") -->
+<!-- ``` -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers, type = "percent_CD3_CD8_total")
-```
-</div>
-</div>
+<!-- ## 1.Distribution -->
+<!-- ```{r distribution, fig.height=12, fig.width=12} -->
+<!-- markers_cases %>% -->
+<!--   select(starts_with("percent_CD3"), starts_with("percent_CD11b")) %>% -->
+<!--   pivot_longer(cols = everything()) %>% -->
+<!--   mutate(region = case_when( -->
+<!--     str_detect(name, ".i")           ~ "intratumoral", -->
+<!--     str_detect(name, ".p")           ~ "peripheral", -->
+<!--     str_detect(name, "_tma")         ~ "TMA", -->
+<!--   )) %>% -->
+<!--   mutate(compartment = case_when( -->
+<!--     str_detect(name, "tumor")           ~ "tumor", -->
+<!--     str_detect(name, "stroma")           ~ "stroma", -->
+<!--     str_detect(name, "total")           ~ "total" -->
+<!--   )) %>% -->
+<!--   mutate(marker = str_match(name, "percent_(.*)(_total|_tumor|_stroma)")[,2]) %>% -->
+<!--   ggplot(aes(value, color= compartment, fill= compartment))+ -->
+<!--   geom_density(alpha=.5)+ -->
+<!--   theme_classic()+ -->
+<!--   facet_wrap(region ~ marker, scales = "free", nrow = 3) + -->
+<!--   theme(legend.position="bottom") -->
+<!-- ``` -->
 
-***
+<!-- ## 2.Logistic regression on category variables adjusted by age + site -->
+<!-- Results are exponentiated. -->
 
-## CD3_FoxP3_total
+<!-- ### 2 categories var -->
+<!-- ```{r log reg function} -->
+<!-- loreg_table_int <- function(data, type){ -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD3_FoxP3_total")
-```
-</div>
+<!--   for (i in exposure_var){ -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers, type = "percent_CD3_FoxP3_total")
-```
-</div>
-</div>
+<!--     main <- str_match(type, "(.*)_total")[,2] %>%  -->
+<!--       str_remove(., "_") -->
 
-***
+<!--     tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data, family = "binomial") %>% -->
+<!--             tbl_regression(exponentiate = TRUE,  -->
+<!--                            intercept = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>%  -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral")) -->
+<!--     print(tbl1) -->
 
-## CD11b_total
+<!--   } -->
+<!-- } -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD11b_total")
-```
-</div>
+<!-- loreg_table_per <- function(data, type){ -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers, type = "percent_CD11b_total")
-```
-</div>
-</div>
+<!--   for (i in exposure_var){ -->
 
-***
+<!--     main <- str_match(type, "(.*)_total")[,2] %>% -->
+<!--       str_remove(., "_") -->
 
-## CD11b_CD15_total
+<!--     tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data, family = "binomial") %>% -->
+<!--             tbl_regression(exponentiate = TRUE, -->
+<!--                            intercept = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>% -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral")) -->
+<!--     print(tbl2) -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD11b_CD15_total")
-```
-</div>
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_(data = markers, type = "percent_CD11b_CD15_total")
-```
-</div>
-</div>
+<!-- #### CD3_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r log reg intra, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r log reg periph, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- #### CD3_CD8_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- #### CD3_FoxP3_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- #### CD11b_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- #### CD11b_CD15_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- <br> -->
+
+<!-- *** -->
+<!-- *** -->
+
+<!-- <br> -->
+
+<!-- ### Immunoscore 3 cat 2018-lancet -->
+
+<!-- ```{r multi reg function} -->
+<!-- multinom_pivot_wider <- function(x) { -->
+<!--   # check inputs match expectatations -->
+<!--   if (!inherits(x, "tbl_regression") || !inherits(x$model_obj, "multinom")) { -->
+<!--     stop("`x=` must be class 'tbl_regression' summary of a `nnet::multinom()` model.") -->
+<!--   } -->
+
+<!--   # create tibble of results -->
+<!--   df <- tibble::tibble(outcome_level = unique(x$table_body$groupname_col)) -->
+<!--   df$tbl <- -->
+<!--     purrr::map( -->
+<!--       df$outcome_level, -->
+<!--       function(lvl) { -->
+<!--         gtsummary::modify_table_body( -->
+<!--           x, -->
+<!--           ~dplyr::filter(.x, .data$groupname_col %in% lvl) %>% -->
+<!--             dplyr::ungroup() %>% -->
+<!--             dplyr::select(-.data$groupname_col) -->
+<!--         ) -->
+<!--       } -->
+<!--     ) -->
+
+<!--   tbl_merge(df$tbl, tab_spanner = paste0("**", df$outcome_level, "**")) -->
+<!-- } -->
+
+<!-- multireg_table <- function(data){ -->
+
+<!--   for (i in exposure_var){ -->
+
+<!--     tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site, -->
+<!--                      data = data) %>% -->
+<!--             tbl_regression(exponentiate = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>% -->
+<!--   multinom_pivot_wider() #%>% -->
+<!--             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral")) -->
+<!--     print(tbl1) -->
+
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- What are the weight? Example: model immunoscore with BMI + age + site -->
+<!-- ```{r} -->
+<!-- multinom(immunoscore_2018lancet_patients ~ BMI_recent_grp + refage + site, -->
+<!--                      data = markers_cases) -->
+<!-- ``` -->
+
+<!-- ```{r multi reg} -->
+<!-- # multireg_table_int <- function(data){ -->
+<!-- #  -->
+<!-- #   for (i in exposure_var){ -->
+<!-- #  -->
+<!-- #     tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site, -->
+<!-- #                      data = data) %>% -->
+<!-- #             tbl_regression(exponentiate = TRUE, -->
+<!-- #                            label = list(`data[[i]]` ~ i)) %>% -->
+<!-- #   multinom_pivot_wider()# %>% -->
+<!-- #             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral")) -->
+<!-- #     print(tbl1) -->
+<!-- #  -->
+<!-- #   } -->
+<!-- # } -->
+<!-- #  -->
+<!-- # multireg_table_per <- function(data){ -->
+<!-- #  -->
+<!-- #   for (i in exposure_var){ -->
+<!-- #  -->
+<!-- #     tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site, -->
+<!-- #                      data = data) %>% -->
+<!-- #             tbl_regression(exponentiate = TRUE, -->
+<!-- #                            label = list(`data[[i]]` ~ i)) %>% -->
+<!-- #   multinom_pivot_wider()# %>% -->
+<!-- #             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Peripheral")) -->
+<!-- #     print(tbl2) -->
+<!-- #  -->
+<!-- #   } -->
+<!-- # } -->
+<!-- ``` -->
+
+<!-- ```{r, results = 'asis'} -->
+<!-- multireg_table(data = markers_cases) -->
+<!-- ``` -->
+<!-- <br> -->
+
+<!-- *** -->
+<!-- *** -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- # 3. Logistic regression on Continuous variables adjusted by age + site -->
+
+<!-- ```{r glm function} -->
+<!-- glm_table_int <- function(data, type){ -->
+
+<!--   for (i in exposure_var){ -->
+
+<!--     main <- str_match(type, "(.*)_total")[,2] %>%  -->
+<!--       str_replace(., "_", " ") -->
+
+<!--     tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data) %>% -->
+<!--             tbl_regression(exponentiate = TRUE,  -->
+<!--                            label = list(`data[[i]]` ~ i)) %>%  -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral")) -->
+<!--     print(tbl1) -->
+
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- ## CD3_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r glm intra, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r glm periph, results = 'asis'} -->
+<!-- # glm_table_(data = markers_cases, type = "percent_CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- ## CD3_CD8_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_cases, type = "percent_CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- ## CD3_FoxP3_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_cases, type = "percent_CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- ## CD11b_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_cases, type = "percent_CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- ## CD11b_CD15_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_(data = markers_cases, type = "percent_CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
 <br>
 
@@ -1440,8 +1518,9 @@ markers_wTMA <- markers %>%
          percent_CD11b_total.i = coalesce(percent_CD11b_total.i, percent_CD11b_total_tma),
          percent_CD11b_CD15_total.i = coalesce(percent_CD11b_CD15_total.i, percent_CD11b_CD15_total_tma),
          
-         mean_tumor.i = coalesce(mean_tumor.i, mean_tumor_tma),
-         mean_tumor.i = mean_tumor.i / 100
+         mean_tumor_tma = mean_tumor_tma / 100,
+         mean_tumor.i = mean_tumor.i / 100,
+         mean_tumor.i = coalesce(mean_tumor.i, mean_tumor_tma)
          )
 ```
 
@@ -1466,20 +1545,20 @@ markers_wTMA %>%
   bold_labels()
 ```
 
-# IIb. Risk assessement
+# IIb. Risk assessement adjusted by age + site + average proportion tumor 
 ```{r dummyb}
 ctrl_case <- markers_wTMA %>%
   mutate_at(c("CD3_tumor.i", "CD3_total.i", "CD3_stroma.i",
               "CD3_CD8_tumor.i", "CD3_CD8_total.i", "CD3_CD8_stroma.i"),
             ~ case_when(
-              is.na(.)                                               ~ 0,
+              casecon == "Control"                                   ~ 0,
               . == "low"                                             ~ 1,
               . == "high"                                            ~ 2,
             )) %>%
   mutate_at(c("CD11b_tumor.i", "CD11b_total.i", "CD11b_stroma.i",
               "CD11b_CD15_tumor.i", "CD11b_CD15_total.i", "CD11b_CD15_stroma.i"),
             ~ case_when(
-              is.na(.)                                               ~ 0,
+              casecon == "Control"                                   ~ 0,
               . == "Absence"                                         ~ 1,
               . == "Presence"                                        ~ 2,
             ))
@@ -1490,8 +1569,7 @@ ctrl_case <- dummy_cols(ctrl_case,
                             "smokcurrent",
                             "packyrs_cat",
                             "tertile_loc",
-                            "tertile_diidensity",
-                            "immunoscore_2018lancet_patients"
+                            "tertile_diidensity"
                             ))
 ```
 
@@ -1711,8 +1789,6 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
-<br>
-<br>
 
 ## 3 levels factor variable - tertile_loc
 ```{r 3 levels factor variable - tertile_locb}
@@ -1782,8 +1858,6 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
-<br>
-<br>
 
 ## 3 levels factor variable - tertile_diidensity
 ```{r 3 levels factor variable - tertile_diidensityb}
@@ -1853,79 +1927,6 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
-<br>
-<br>
-
-## 3 levels factor variable - immunoscore_2018lancet_patients
-```{r 3 levels factor variable - immunoscore_2018lancet_patientsb}
-risk_ass <- function(data, type){
-
-    print(paste("RISK ASSESSMENT FOR ->", "immunoscore_2018lancet_patients_Intermediate", "immunoscore_2018lancet_patients_High", ":"))
-    risk <- eh_test_subtype(label = type,
-                M = 2,
-                factors = list("refage", "site", "mean_tumor.i", "immunoscore_2018lancet_patients_Intermediate", "immunoscore_2018lancet_patients_High"),
-                data = data)
-
-    print(risk[["or_ci_p"]])
-
-    print(paste("OVERALL PVAL FOR ->", "immunoscore_2018lancet_patients", ":"))
-
-    print(posthoc_factor_test(fit = risk,
-                        factor = "immunoscore_2018lancet_patients",
-                        nlevels = 3))
-}
-```
-
-### CD3_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_tumor.i")
-```
-### CD3_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_total.i")
-```
-### CD3_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_stroma.i")
-```
-### CD3_CD8_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_tumor.i")
-```
-### CD3_CD8_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_total.i")
-```
-### CD3_CD8_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_stroma.i")
-```
-### CD11b_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_tumor.i")
-```
-### CD11b_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_total.i")
-```
-### CD11b_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_stroma.i")
-```
-### CD11b_CD15_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_tumor.i")
-```
-### CD11b_CD15_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
-```
-### CD11b_CD15_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
-```
-<br>
-<br>
 
 ## 3 levels factor variable - BMI_recent_grp
 ```{r 3 levels factor variable - BMI_recent_grpb}
@@ -1995,8 +1996,6 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
-<br>
-<br>
 
 ## 3 levels factor variable - BMI_YA_grp
 ```{r 3 levels factor variable - BMI_YA_grpb}
@@ -2066,21 +2065,19 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
-<br>
-<br>
 
 ***
 
-# IIIb. Secondary analysis - Case only
+<!-- # IIIb. Secondary analysis - Case only -->
 
-```{r}
-markers_wTMA <- markers_wTMA %>% 
-  filter(casecon == "Case")
-```
+<!-- ```{r} -->
+<!-- markers_wTMA_cases <- markers_wTMA %>%  -->
+<!--   filter(casecon == "Case") -->
+<!-- ``` -->
 
 <!-- ## 1.Distribution -->
 <!-- ```{r distribution, fig.height=12, fig.width=12} -->
-<!-- markers_wTMA %>% -->
+<!-- markers_wTMA_cases %>% -->
 <!--   select(starts_with("percent_CD3"), starts_with("percent_CD11b")) %>% -->
 <!--   pivot_longer(cols = everything()) %>% -->
 <!--   mutate(region = case_when( -->
@@ -2101,145 +2098,145 @@ markers_wTMA <- markers_wTMA %>%
 <!--   theme(legend.position="bottom") -->
 <!-- ``` -->
 
-## 2b.Logistic regression on category variables adjusted by age + site
-Results are exponentiated.
+<!-- ## 2b.Logistic regression on category variables adjusted by age + site -->
+<!-- Results are exponentiated. -->
 
-### 2 categories var
-```{r log reg functionb}
-loreg_table_int <- function(data, type){
-  
-  for (i in exposure_var){
-    
-    main <- str_match(type, "(.*)_total")[,2] %>% 
-      str_remove(., "_")
-    
-    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
-                data = data, family = "binomial") %>%
-            tbl_regression(exponentiate = TRUE, 
-                           intercept = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>% 
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
-    print(tbl1)
-    
-  }
-}
+<!-- ### 2 categories var -->
+<!-- ```{r log reg functionb} -->
+<!-- loreg_table_int <- function(data, type){ -->
 
-loreg_table_per <- function(data, type){
+<!--   for (i in exposure_var){ -->
 
-  for (i in exposure_var){
+<!--     main <- str_match(type, "(.*)_total")[,2] %>%  -->
+<!--       str_remove(., "_") -->
 
-    main <- str_match(type, "(.*)_total")[,2] %>%
-      str_remove(., "_")
+<!--     tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data, family = "binomial") %>% -->
+<!--             tbl_regression(exponentiate = TRUE,  -->
+<!--                            intercept = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>%  -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral")) -->
+<!--     print(tbl1) -->
 
-    tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site, 
-                data = data, family = "binomial") %>%
-            tbl_regression(exponentiate = TRUE,
-                           intercept = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>%
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral"))
-    print(tbl2)
+<!--   } -->
+<!-- } -->
 
-  }
-}
-```
+<!-- loreg_table_per <- function(data, type){ -->
 
-#### CD3_total
+<!--   for (i in exposure_var){ -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r log reg intra d, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD3_total")
-```
-</div>
+<!--     main <- str_match(type, "(.*)_total")[,2] %>% -->
+<!--       str_remove(., "_") -->
 
-<div class = "col-md-6">
-```{r log reg periph d, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD3_total")
-```
-</div>
-</div>
+<!--     tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data, family = "binomial") %>% -->
+<!--             tbl_regression(exponentiate = TRUE, -->
+<!--                            intercept = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>% -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral")) -->
+<!--     print(tbl2) -->
 
-***
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
 
-#### CD3_CD8_total
+<!-- #### CD3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD3_CD8_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r log reg intra d, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD3_CD8_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r log reg periph d, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-#### CD3_FoxP3_total
+<!-- #### CD3_CD8_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD3_FoxP3_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD3_FoxP3_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-#### CD11b_total
+<!-- #### CD3_FoxP3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD11b_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD11b_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-#### CD11b_CD15_total
+<!-- #### CD11b_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD11b_CD15_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD11b_CD15_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-<br>
+<!-- *** -->
 
-***
-***
+<!-- #### CD11b_CD15_total -->
 
-<br>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-### Immunoscore 3 cat 2018-lancet
-TMA cannot be included in the immunoscore categories aka take first values on ROI only.  
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- <br> -->
+
+<!-- *** -->
+<!-- *** -->
+
+<!-- <br> -->
+
+<!-- ### Immunoscore 3 cat 2018-lancet -->
+<!-- TMA cannot be included in the immunoscore categories aka take first values on ROI only.   -->
 
 <!-- ```{r multi reg functionb} -->
 <!-- multinom_pivot_wider <- function(x) { -->
@@ -2296,28 +2293,28 @@ TMA cannot be included in the immunoscore categories aka take first values on RO
 <!--   } -->
 <!-- } -->
 <!-- ``` -->
-<!-- <!-- Intratumoral --> -->
+<!-- Intratumoral -->
 
 <!-- <div class = "row"> -->
 <!-- <div class = "col-md-6"> -->
 <!-- ```{r, results = 'asis'} -->
 
-<!-- # model <- multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_wTMA) -->
+<!-- # model <- multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_wTMA_cases) -->
 <!-- # broom::tidy(model) -->
 <!-- # exp(coef(model)) -->
-<!-- # multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_wTMA) %>% -->
+<!-- # multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_wTMA_cases) %>% -->
 <!-- #   tbl_regression(exponentiate = TRUE) %>% -->
 <!-- #   multinom_pivot_wider() -->
 
-<!-- # multireg_table_int(data = markers_wTMA) -->
+<!-- # multireg_table_int(data = markers_wTMA_cases) -->
 <!-- ``` -->
 <!-- </div> -->
 
-<!-- <!-- Peripheral  --> -->
+<!-- Peripheral  -->
 
 <!-- <div class = "col-md-6"> -->
 <!-- ```{r, results = 'asis'} -->
-<!-- # multireg_table_per(data = markers_wTMA) -->
+<!-- # multireg_table_per(data = markers_wTMA_cases) -->
 <!-- ``` -->
 <!-- </div> -->
 <!-- </div> -->
@@ -2325,7 +2322,7 @@ TMA cannot be included in the immunoscore categories aka take first values on RO
 <!-- What are the weight? -->
 <!-- ```{r} -->
 <!-- multinom(immunoscore_2018lancet_patients ~ immunoscore_2018lancet_patients + refage + site, -->
-<!--                      data = markers_wTMA) -->
+<!--                      data = markers_wTMA_cases) -->
 <!-- ``` -->
 
 <!-- ```{r multi reg} -->
@@ -2365,7 +2362,7 @@ TMA cannot be included in the immunoscore categories aka take first values on RO
 <!-- <div class = "row"> -->
 <!-- <div class = "col-md-6"> -->
 <!-- ```{r, results = 'asis'} -->
-<!-- multireg_table_int(data = markers_wTMA) -->
+<!-- multireg_table_int(data = markers_wTMA_cases) -->
 <!-- ``` -->
 <!-- </div> -->
 
@@ -2373,128 +2370,128 @@ TMA cannot be included in the immunoscore categories aka take first values on RO
 
 <!-- <div class = "col-md-6"> -->
 <!-- ```{r, results = 'asis'} -->
-<!-- multireg_table_per(data = markers_wTMA) -->
+<!-- multireg_table_per(data = markers_wTMA_cases) -->
 <!-- ``` -->
 <!-- </div> -->
 <!-- </div> -->
 
-<br>
+<!-- <br> -->
 
-***
-***
+<!-- *** -->
+<!-- *** -->
 
-<br>
-<br>
+<!-- <br> -->
+<!-- <br> -->
 
-# 3b. Logistic regression on Continuous variables adjusted by age + site
+<!-- # 3b. Logistic regression on Continuous variables adjusted by age + site -->
 
-```{r glm functionb}
-glm_table_int <- function(data, type){
-  
-  for (i in exposure_var){
-    
-    main <- str_match(type, "(.*)_total")[,2] %>% 
-      str_replace(., "_", " ")
-    
-    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
-                data = data) %>%
-            tbl_regression(exponentiate = TRUE, 
-                           label = list(`data[[i]]` ~ i)) %>% 
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
-    print(tbl1)
-    
-  }
-}
-```
+<!-- ```{r glm functionb} -->
+<!-- glm_table_int <- function(data, type){ -->
 
-## CD3_total
+<!--   for (i in exposure_var){ -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r glm intrab, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD3_total")
-```
-</div>
+<!--     main <- str_match(type, "(.*)_total")[,2] %>%  -->
+<!--       str_replace(., "_", " ") -->
 
-<div class = "col-md-6">
-```{r glm periphb, results = 'asis'}
-# glm_table_(data = markers_wTMA, type = "percent_CD3_total")
-```
-</div>
-</div>
+<!--     tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data) %>% -->
+<!--             tbl_regression(exponentiate = TRUE,  -->
+<!--                            label = list(`data[[i]]` ~ i)) %>%  -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral")) -->
+<!--     print(tbl1) -->
 
-***
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
 
-## CD3_CD8_total
+<!-- ## CD3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD3_CD8_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r glm intrab, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers_wTMA, type = "percent_CD3_CD8_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r glm periphb, results = 'asis'} -->
+<!-- # glm_table_(data = markers_wTMA_cases, type = "percent_CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-## CD3_FoxP3_total
+<!-- ## CD3_CD8_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD3_FoxP3_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers_wTMA, type = "percent_CD3_FoxP3_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_wTMA_cases, type = "percent_CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-## CD11b_total
+<!-- ## CD3_FoxP3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD11b_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers_wTMA, type = "percent_CD11b_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_wTMA_cases, type = "percent_CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-## CD11b_CD15_total
+<!-- ## CD11b_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD11b_CD15_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_(data = markers_wTMA, type = "percent_CD11b_CD15_total")
-```
-</div>
-</div>
-<br>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_wTMA_cases, type = "percent_CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- ## CD11b_CD15_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_(data = markers_wTMA_cases, type = "percent_CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+<!-- <br> -->
 <br>
 
 ***
@@ -2514,7 +2511,7 @@ div.blue { background-color:#0099CC; border-radius: 5px; padding: 20px; font-siz
 
 <br>
 
-# Fully adjusted models + fullpregnum + ocdur + tubelig + famhist_br_ov
+# Fully adjusted models age + site + fullpregnum + ocdur + tubelig + famhist_br_ov
 
 # IV. Risk assessement
 I created the dummy variables.
@@ -2523,16 +2520,23 @@ ctrl_case <- markers %>%
   mutate_at(c("CD3_tumor.i", "CD3_total.i", "CD3_stroma.i",
               "CD3_CD8_tumor.i", "CD3_CD8_total.i", "CD3_CD8_stroma.i"),
             ~ case_when(
-              is.na(.)                                               ~ 0,
+              casecon == "Control"                                   ~ 0,
               . == "low"                                             ~ 1,
               . == "high"                                            ~ 2,
             )) %>%
   mutate_at(c("CD11b_tumor.i", "CD11b_total.i", "CD11b_stroma.i",
               "CD11b_CD15_tumor.i", "CD11b_CD15_total.i", "CD11b_CD15_stroma.i"),
             ~ case_when(
-              is.na(.)                                               ~ 0,
+              casecon == "Control"                                   ~ 0,
               . == "Absence"                                         ~ 1,
               . == "Presence"                                        ~ 2,
+            )) %>% 
+  mutate_at(c("immunoscore_2018lancet_patients"), 
+            ~ case_when(
+              casecon == "Control"                                   ~ 0,
+              . == "Low"                                             ~ 1,
+              . == "Intermediate"                                    ~ 2,
+              . == "High"                                            ~ 3
             ))
 
 ctrl_case <- dummy_cols(ctrl_case,
@@ -2541,15 +2545,7 @@ ctrl_case <- dummy_cols(ctrl_case,
                             "smokcurrent",
                             "packyrs_cat",
                             "tertile_loc",
-                            "tertile_diidensity",
-                            "immunoscore_2018lancet_patients"
-                            # "BMI_YA_2grp",
-                            # "endomet", "pid", "fibroids",
-                            # "talcever", "talcgen", "talcnongen",
-                            # "diab", "hrtdis", "hbp", "hchol",
-                            # "aspirin", "NSAID", "aceta",
-                            # "inactive", "paga",
-                            # "education"
+                            "tertile_diidensity"
                             ))
 
 colnames(ctrl_case)
@@ -2633,6 +2629,29 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+immuno_ctrl_case <- ctrl_case %>% 
+  filter(casecon == "Control" | slide_type_considered == "ROI")
+
+risk_ass <- function(data, type){
+
+  for (i in factor_name){
+
+    print(paste("RISK ASSESSMENT FOR ->", i, ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", i),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+  }
+}
+
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
+```
 
 ## 3 levels factor variable - smokcurrent
 ```{r 3 levels factor variable - smokcurrent c}
@@ -2702,6 +2721,27 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+risk_ass <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "smokcurrent_current", "smokcurrent_former", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "smokcurrent_current", "smokcurrent_former"),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+    print(paste("OVERALL PVAL FOR ->", "smokcurrent", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "smokcurrent",
+                        nlevels = 3))
+}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
+```
 
 ## 3 levels factor variable - packyrs_cat
 ```{r 3 levels factor variable - packyrs_cat c}
@@ -2770,6 +2810,27 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ### CD11b_CD15_stroma.i
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
+```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+risk_ass <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "packyrs_cat_inf_eq_15", "packyrs_cat_sup_15", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "packyrs_cat_inf_eq_15", "packyrs_cat_sup_15"),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+    print(paste("OVERALL PVAL FOR ->", "packyrs_cat", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "packyrs_cat",
+                        nlevels = 3))
+}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
 ```
 <br>
 <br>
@@ -2842,6 +2903,27 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+risk_ass <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "tertile_loc_Medium", "tertile_loc_High", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "tertile_loc_Medium", "tertile_loc_High"),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+    print(paste("OVERALL PVAL FOR ->", "tertile_loc", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "tertile_loc",
+                        nlevels = 3))
+}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
+```
 <br>
 <br>
 
@@ -2913,76 +2995,26 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
-<br>
-<br>
-
-## 3 levels factor variable - immunoscore_2018lancet_patients
-```{r 3 levels factor variable - immunoscore_2018lancet_patients c}
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
 risk_ass <- function(data, type){
 
-    print(paste("RISK ASSESSMENT FOR ->", "immunoscore_2018lancet_patients_Intermediate", "immunoscore_2018lancet_patients_High", ":"))
+    print(paste("RISK ASSESSMENT FOR ->", "tertile_diidensity_Medium", "tertile_diidensity_High", ":"))
     risk <- eh_test_subtype(label = type,
-                M = 2,
-                factors = list("refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "immunoscore_2018lancet_patients_Intermediate", "immunoscore_2018lancet_patients_High"),
+                M = 3,
+                factors = list("refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "tertile_diidensity_Medium", "tertile_diidensity_High"),
                 data = data)
 
     print(risk[["or_ci_p"]])
 
-    print(paste("OVERALL PVAL FOR ->", "immunoscore_2018lancet_patients", ":"))
+    print(paste("OVERALL PVAL FOR ->", "tertile_diidensity", ":"))
 
     print(posthoc_factor_test(fit = risk,
-                        factor = "immunoscore_2018lancet_patients",
+                        factor = "tertile_diidensity",
                         nlevels = 3))
 }
-```
-
-### CD3_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_tumor.i")
-```
-### CD3_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_total.i")
-```
-### CD3_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_stroma.i")
-```
-### CD3_CD8_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_tumor.i")
-```
-### CD3_CD8_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_total.i")
-```
-### CD3_CD8_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_stroma.i")
-```
-### CD11b_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_tumor.i")
-```
-### CD11b_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_total.i")
-```
-### CD11b_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_stroma.i")
-```
-### CD11b_CD15_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_tumor.i")
-```
-### CD11b_CD15_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
-```
-### CD11b_CD15_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
 ```
 <br>
 <br>
@@ -3055,6 +3087,27 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+risk_ass <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_recent_grp_25_29", "BMI_recent_grp_sup_eq_30", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "BMI_recent_grp_25_29", "BMI_recent_grp_sup_eq_30"),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+    print(paste("OVERALL PVAL FOR ->", "BMI_recent_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_recent_grp",
+                        nlevels = 3))
+}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
+```
 <br>
 <br>
 
@@ -3126,21 +3179,42 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
 ```{r}
 risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 ```
+### immunoscore_2018lancet_patients
+**On data with ROI cases and controls**
+```{r}
+risk_ass <- function(data, type){
+
+    print(paste("RISK ASSESSMENT FOR ->", "BMI_YA_grp_20_24", "BMI_YA_grp_sup_eq_25", ":"))
+    risk <- eh_test_subtype(label = type,
+                M = 3,
+                factors = list("refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "BMI_YA_grp_20_24", "BMI_YA_grp_sup_eq_25"),
+                data = data)
+
+    print(risk[["or_ci_p"]])
+
+    print(paste("OVERALL PVAL FOR ->", "BMI_YA_grp", ":"))
+
+    print(posthoc_factor_test(fit = risk,
+                        factor = "BMI_YA_grp",
+                        nlevels = 3))
+}
+risk_ass(data = immuno_ctrl_case, type = "immunoscore_2018lancet_patients")
+```
 <br>
 <br>
 
 ***
 
-# VI. Secondary analysis - Case only
+<!-- # VI. Secondary analysis - Case only -->
 
-```{r}
-markers <- markers %>% 
-  filter(casecon == "Case")
-```
+<!-- ```{r} -->
+<!-- markers_cases <- markers %>%  -->
+<!--   filter(casecon == "Case") -->
+<!-- ``` -->
 
 <!-- ## 1.Distribution -->
 <!-- ```{r distribution c, fig.height=12, fig.width=12} -->
-<!-- markers %>% -->
+<!-- markers_cases %>% -->
 <!--   select(starts_with("percent_CD3"), starts_with("percent_CD11b")) %>% -->
 <!--   pivot_longer(cols = everything()) %>% -->
 <!--   mutate(region = case_when( -->
@@ -3161,343 +3235,343 @@ markers <- markers %>%
 <!--   theme(legend.position="bottom") -->
 <!-- ``` -->
 
-## 2.Logistic regression on category variables adjusted by age + site
-Results are exponentiated.
+<!-- ## 2.Logistic regression on category variables adjusted by age + site -->
+<!-- Results are exponentiated. -->
 
-### 2 categories var
-```{r log reg function c}
-loreg_table_int <- function(data, type){
-  
-  for (i in exposure_var){
-    
-    main <- str_match(type, "(.*)_total")[,2] %>% 
-      str_remove(., "_")
-    
-    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
-                data = data, family = "binomial") %>%
-            tbl_regression(exponentiate = TRUE, 
-                           intercept = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>% 
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
-    print(tbl1)
-    
-  }
-}
+<!-- ### 2 categories var -->
+<!-- ```{r log reg function c} -->
+<!-- loreg_table_int <- function(data, type){ -->
 
-loreg_table_per <- function(data, type){
+<!--   for (i in exposure_var){ -->
 
-  for (i in exposure_var){
+<!--     main <- str_match(type, "(.*)_total")[,2] %>%  -->
+<!--       str_remove(., "_") -->
 
-    main <- str_match(type, "(.*)_total")[,2] %>%
-      str_remove(., "_")
+<!--     tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data, family = "binomial") %>% -->
+<!--             tbl_regression(exponentiate = TRUE,  -->
+<!--                            intercept = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>%  -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral")) -->
+<!--     print(tbl1) -->
 
-    tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site, 
-                data = data, family = "binomial") %>%
-            tbl_regression(exponentiate = TRUE,
-                           intercept = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>%
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral"))
-    print(tbl2)
+<!--   } -->
+<!-- } -->
 
-  }
-}
-```
+<!-- loreg_table_per <- function(data, type){ -->
 
-#### CD3_total
+<!--   for (i in exposure_var){ -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r log reg intra c, results = 'asis'}
-loreg_table_int(data = markers, type = "CD3_total")
-```
-</div>
+<!--     main <- str_match(type, "(.*)_total")[,2] %>% -->
+<!--       str_remove(., "_") -->
 
-<div class = "col-md-6">
-```{r log reg periph c, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD3_total")
-```
-</div>
-</div>
+<!--     tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data, family = "binomial") %>% -->
+<!--             tbl_regression(exponentiate = TRUE, -->
+<!--                            intercept = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>% -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral")) -->
+<!--     print(tbl2) -->
 
-***
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
 
-#### CD3_CD8_total
+<!-- #### CD3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers, type = "CD3_CD8_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r log reg intra c, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD3_CD8_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r log reg periph c, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-#### CD3_FoxP3_total
+<!-- #### CD3_CD8_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers, type = "CD3_FoxP3_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD3_FoxP3_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-#### CD11b_total
+<!-- #### CD3_FoxP3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers, type = "CD11b_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD11b_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-#### CD11b_CD15_total
+<!-- #### CD11b_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers, type = "CD11b_CD15_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers, type = "CD11b_CD15_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-<br>
+<!-- *** -->
 
-***
-***
+<!-- #### CD11b_CD15_total -->
 
-<br>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_cases, type = "CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-### Immunoscore 3 cat 2018-lancet
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_cases, type = "CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-```{r multi reg function c}
-multinom_pivot_wider <- function(x) {
-  # check inputs match expectatations
-  if (!inherits(x, "tbl_regression") || !inherits(x$model_obj, "multinom")) {
-    stop("`x=` must be class 'tbl_regression' summary of a `nnet::multinom()` model.")
-  }
+<!-- <br> -->
 
-  # create tibble of results
-  df <- tibble::tibble(outcome_level = unique(x$table_body$groupname_col))
-  df$tbl <-
-    purrr::map(
-      df$outcome_level,
-      function(lvl) {
-        gtsummary::modify_table_body(
-          x,
-          ~dplyr::filter(.x, .data$groupname_col %in% lvl) %>%
-            dplyr::ungroup() %>%
-            dplyr::select(-.data$groupname_col)
-        )
-      }
-    )
+<!-- *** -->
+<!-- *** -->
 
-  tbl_merge(df$tbl, tab_spanner = paste0("**", df$outcome_level, "**"))
-}
+<!-- <br> -->
 
-multireg_table <- function(data){
+<!-- ### Immunoscore 3 cat 2018-lancet -->
 
-  for (i in exposure_var){
+<!-- ```{r multi reg function c} -->
+<!-- multinom_pivot_wider <- function(x) { -->
+<!--   # check inputs match expectatations -->
+<!--   if (!inherits(x, "tbl_regression") || !inherits(x$model_obj, "multinom")) { -->
+<!--     stop("`x=` must be class 'tbl_regression' summary of a `nnet::multinom()` model.") -->
+<!--   } -->
 
-    tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
-                     data = data) %>%
-            tbl_regression(exponentiate = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>%
-  multinom_pivot_wider() #%>%
-            # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral"))
-    print(tbl1)
+<!--   # create tibble of results -->
+<!--   df <- tibble::tibble(outcome_level = unique(x$table_body$groupname_col)) -->
+<!--   df$tbl <- -->
+<!--     purrr::map( -->
+<!--       df$outcome_level, -->
+<!--       function(lvl) { -->
+<!--         gtsummary::modify_table_body( -->
+<!--           x, -->
+<!--           ~dplyr::filter(.x, .data$groupname_col %in% lvl) %>% -->
+<!--             dplyr::ungroup() %>% -->
+<!--             dplyr::select(-.data$groupname_col) -->
+<!--         ) -->
+<!--       } -->
+<!--     ) -->
 
-  }
-}
-```
+<!--   tbl_merge(df$tbl, tab_spanner = paste0("**", df$outcome_level, "**")) -->
+<!-- } -->
 
-What are the weight? Example: model immunoscore with BMI + age + site
-```{r}
-multinom(immunoscore_2018lancet_patients ~ BMI_recent_grp + refage + site,
-                     data = markers)
-```
+<!-- multireg_table <- function(data){ -->
 
-```{r multi reg c}
-# multireg_table_int <- function(data){
-# 
-#   for (i in exposure_var){
-# 
-#     tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
-#                      data = data) %>%
-#             tbl_regression(exponentiate = TRUE,
-#                            label = list(`data[[i]]` ~ i)) %>%
-#   multinom_pivot_wider()# %>%
-#             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral"))
-#     print(tbl1)
-# 
-#   }
-# }
-# 
-# multireg_table_per <- function(data){
-# 
-#   for (i in exposure_var){
-# 
-#     tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site,
-#                      data = data) %>%
-#             tbl_regression(exponentiate = TRUE,
-#                            label = list(`data[[i]]` ~ i)) %>%
-#   multinom_pivot_wider()# %>%
-#             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Peripheral"))
-#     print(tbl2)
-# 
-#   }
-# }
-```
+<!--   for (i in exposure_var){ -->
 
-```{r, results = 'asis'}
-multireg_table(data = markers)
-```
-<br>
+<!--     tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site, -->
+<!--                      data = data) %>% -->
+<!--             tbl_regression(exponentiate = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>% -->
+<!--   multinom_pivot_wider() #%>% -->
+<!--             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral")) -->
+<!--     print(tbl1) -->
 
-***
-***
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
 
-<br>
-<br>
+<!-- What are the weight? Example: model immunoscore with BMI + age + site -->
+<!-- ```{r} -->
+<!-- multinom(immunoscore_2018lancet_patients ~ BMI_recent_grp + refage + site, -->
+<!--                      data = markers_cases) -->
+<!-- ``` -->
 
-# 3. Logistic regression on Continuous variables adjusted by age + site
+<!-- ```{r multi reg c} -->
+<!-- # multireg_table_int <- function(data){ -->
+<!-- #  -->
+<!-- #   for (i in exposure_var){ -->
+<!-- #  -->
+<!-- #     tbl1 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site, -->
+<!-- #                      data = data) %>% -->
+<!-- #             tbl_regression(exponentiate = TRUE, -->
+<!-- #                            label = list(`data[[i]]` ~ i)) %>% -->
+<!-- #   multinom_pivot_wider()# %>% -->
+<!-- #             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Intratumoral")) -->
+<!-- #     print(tbl1) -->
+<!-- #  -->
+<!-- #   } -->
+<!-- # } -->
+<!-- #  -->
+<!-- # multireg_table_per <- function(data){ -->
+<!-- #  -->
+<!-- #   for (i in exposure_var){ -->
+<!-- #  -->
+<!-- #     tbl2 <- multinom(immunoscore_2018lancet_patients ~ data[[i]] + refage + site, -->
+<!-- #                      data = data) %>% -->
+<!-- #             tbl_regression(exponentiate = TRUE, -->
+<!-- #                            label = list(`data[[i]]` ~ i)) %>% -->
+<!-- #   multinom_pivot_wider()# %>% -->
+<!-- #             # modify_spanning_header(everything() ~ paste("Association with Overall", "immunoscore_patients", "Peripheral")) -->
+<!-- #     print(tbl2) -->
+<!-- #  -->
+<!-- #   } -->
+<!-- # } -->
+<!-- ``` -->
 
-```{r glm function c}
-glm_table_int <- function(data, type){
-  
-  for (i in exposure_var){
-    
-    main <- str_match(type, "(.*)_total")[,2] %>% 
-      str_replace(., "_", " ")
-    
-    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
-                data = data) %>%
-            tbl_regression(exponentiate = TRUE, 
-                           label = list(`data[[i]]` ~ i)) %>% 
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
-    print(tbl1)
-    
-  }
-}
-```
+<!-- ```{r, results = 'asis'} -->
+<!-- multireg_table(data = markers_cases) -->
+<!-- ``` -->
+<!-- <br> -->
 
-## CD3_total
+<!-- *** -->
+<!-- *** -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r glm intra c, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD3_total")
-```
-</div>
+<!-- <br> -->
+<!-- <br> -->
 
-<div class = "col-md-6">
-```{r glm periph c, results = 'asis'}
-# glm_table_(data = markers, type = "percent_CD3_total")
-```
-</div>
-</div>
+<!-- # 3. Logistic regression on Continuous variables adjusted by age + site -->
 
-***
+<!-- ```{r glm function c} -->
+<!-- glm_table_int <- function(data, type){ -->
 
-## CD3_CD8_total
+<!--   for (i in exposure_var){ -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD3_CD8_total")
-```
-</div>
+<!--     main <- str_match(type, "(.*)_total")[,2] %>%  -->
+<!--       str_replace(., "_", " ") -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers, type = "percent_CD3_CD8_total")
-```
-</div>
-</div>
+<!--     tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data) %>% -->
+<!--             tbl_regression(exponentiate = TRUE,  -->
+<!--                            label = list(`data[[i]]` ~ i)) %>%  -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral")) -->
+<!--     print(tbl1) -->
 
-***
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
 
-## CD3_FoxP3_total
+<!-- ## CD3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD3_FoxP3_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r glm intra c, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers, type = "percent_CD3_FoxP3_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r glm periph c, results = 'asis'} -->
+<!-- # glm_table_(data = markers_cases, type = "percent_CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-## CD11b_total
+<!-- ## CD3_CD8_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD11b_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers, type = "percent_CD11b_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_cases, type = "percent_CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-## CD11b_CD15_total
+<!-- ## CD3_FoxP3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers, type = "percent_CD11b_CD15_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_(data = markers, type = "percent_CD11b_CD15_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_cases, type = "percent_CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- ## CD11b_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_cases, type = "percent_CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- ## CD11b_CD15_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_cases, type = "percent_CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_(data = markers_cases, type = "percent_CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
 <br>
 
@@ -3520,8 +3594,9 @@ markers_wTMA <- markers %>%
          percent_CD11b_total.i = coalesce(percent_CD11b_total.i, percent_CD11b_total_tma),
          percent_CD11b_CD15_total.i = coalesce(percent_CD11b_CD15_total.i, percent_CD11b_CD15_total_tma),
          
-         mean_tumor.i = coalesce(mean_tumor.i, mean_tumor_tma),
-         mean_tumor.i = mean_tumor.i / 100
+         mean_tumor_tma = mean_tumor_tma / 100,
+         mean_tumor.i = mean_tumor.i / 100,
+         mean_tumor.i = coalesce(mean_tumor.i, mean_tumor_tma)
          )
 ```
 
@@ -3546,20 +3621,20 @@ markers_wTMA %>%
   bold_labels()
 ```
 
-# Vb. Risk assessement
+# Vb. Risk assessement adjusted by age + site + fullpregnum + ocdur + tubelig + famhist_br_ov + average proportion tumor 
 ```{r dummy d}
 ctrl_case <- markers_wTMA %>%
   mutate_at(c("CD3_tumor.i", "CD3_total.i", "CD3_stroma.i",
               "CD3_CD8_tumor.i", "CD3_CD8_total.i", "CD3_CD8_stroma.i"),
             ~ case_when(
-              is.na(.)                                               ~ 0,
+              casecon == "Control"                                   ~ 0,
               . == "low"                                             ~ 1,
               . == "high"                                            ~ 2,
             )) %>%
   mutate_at(c("CD11b_tumor.i", "CD11b_total.i", "CD11b_stroma.i",
               "CD11b_CD15_tumor.i", "CD11b_CD15_total.i", "CD11b_CD15_stroma.i"),
             ~ case_when(
-              is.na(.)                                               ~ 0,
+              casecon == "Control"                                   ~ 0,
               . == "Absence"                                         ~ 1,
               . == "Presence"                                        ~ 2,
             ))
@@ -3570,8 +3645,7 @@ ctrl_case <- dummy_cols(ctrl_case,
                             "smokcurrent",
                             "packyrs_cat",
                             "tertile_loc",
-                            "tertile_diidensity",
-                            "immunoscore_2018lancet_patients"
+                            "tertile_diidensity"
                             ))
 ```
 
@@ -3585,7 +3659,7 @@ factor_name <- c("smokever",
                  "inactive", "paga",
                  "education",
                  "diidensity", "diidenswithsupp",
-                 "famhist_br_ov"
+                 "famhist_br_ov",
                  "perceived_discrim", "phys_trust",
                  "BMI_YA_2grp")
 
@@ -3672,6 +3746,12 @@ risk_ass <- function(data, type){
                         factor = "smokcurrent",
                         nlevels = 3))
 }
+
+# eh_test_subtype(label = "CD3_total.i",
+#                 M = 2,
+#                 factors = list("refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "mean_tumor.i", "smokcurrent_current", "smokcurrent_former"),
+#                 data = ctrl_case)[["or_ci_p"]]
+# a <- ctrl_case %>% select(suid, casecon, CD3_total.i, "refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "mean_tumor.i", "smokcurrent")
 ```
 
 ### CD3_tumor.i
@@ -3936,77 +4016,6 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 <br>
 <br>
 
-## 3 levels factor variable - immunoscore_2018lancet_patients
-```{r 3 levels factor variable - immunoscore_2018lancet_patients d}
-risk_ass <- function(data, type){
-
-    print(paste("RISK ASSESSMENT FOR ->", "immunoscore_2018lancet_patients_Intermediate", "immunoscore_2018lancet_patients_High", ":"))
-    risk <- eh_test_subtype(label = type,
-                M = 2,
-                factors = list("refage", "site", "fullpregnum", "ocdur", "tubelig", "famhist_br_ov", "mean_tumor.i", "immunoscore_2018lancet_patients_Intermediate", "immunoscore_2018lancet_patients_High"),
-                data = data)
-
-    print(risk[["or_ci_p"]])
-
-    print(paste("OVERALL PVAL FOR ->", "immunoscore_2018lancet_patients", ":"))
-
-    print(posthoc_factor_test(fit = risk,
-                        factor = "immunoscore_2018lancet_patients",
-                        nlevels = 3))
-}
-```
-
-### CD3_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_tumor.i")
-```
-### CD3_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_total.i")
-```
-### CD3_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_stroma.i")
-```
-### CD3_CD8_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_tumor.i")
-```
-### CD3_CD8_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_total.i")
-```
-### CD3_CD8_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD3_CD8_stroma.i")
-```
-### CD11b_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_tumor.i")
-```
-### CD11b_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_total.i")
-```
-### CD11b_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_stroma.i")
-```
-### CD11b_CD15_tumor.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_tumor.i")
-```
-### CD11b_CD15_total.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_total.i")
-```
-### CD11b_CD15_stroma.i
-```{r}
-risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
-```
-<br>
-<br>
-
 ## 3 levels factor variable - BMI_recent_grp
 ```{r 3 levels factor variable - BMI_recent_grp d}
 risk_ass <- function(data, type){
@@ -4151,16 +4160,16 @@ risk_ass(data = ctrl_case, type = "CD11b_CD15_stroma.i")
 
 ***
 
-# VIb. Secondary analysis - Case only
+<!-- # VIb. Secondary analysis - Case only -->
 
-```{r}
-markers_wTMA <- markers_wTMA %>% 
-  filter(casecon == "Case")
-```
+<!-- ```{r} -->
+<!-- markers_wTMA_cases <- markers_wTMA %>%  -->
+<!--   filter(casecon == "Case") -->
+<!-- ``` -->
 
 <!-- ## 1.Distribution -->
 <!-- ```{r distribution, fig.height=12, fig.width=12} -->
-<!-- markers_wTMA %>% -->
+<!-- markers_wTMA_cases %>% -->
 <!--   select(starts_with("percent_CD3"), starts_with("percent_CD11b")) %>% -->
 <!--   pivot_longer(cols = everything()) %>% -->
 <!--   mutate(region = case_when( -->
@@ -4181,145 +4190,145 @@ markers_wTMA <- markers_wTMA %>%
 <!--   theme(legend.position="bottom") -->
 <!-- ``` -->
 
-## 2b.Logistic regression on category variables adjusted by age + site
-Results are exponentiated.
+<!-- ## 2b.Logistic regression on category variables adjusted by age + site -->
+<!-- Results are exponentiated. -->
 
-### 2 categories var
-```{r log reg function d}
-loreg_table_int <- function(data, type){
-  
-  for (i in exposure_var){
-    
-    main <- str_match(type, "(.*)_total")[,2] %>% 
-      str_remove(., "_")
-    
-    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
-                data = data, family = "binomial") %>%
-            tbl_regression(exponentiate = TRUE, 
-                           intercept = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>% 
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
-    print(tbl1)
-    
-  }
-}
+<!-- ### 2 categories var -->
+<!-- ```{r log reg function d} -->
+<!-- loreg_table_int <- function(data, type){ -->
 
-loreg_table_per <- function(data, type){
+<!--   for (i in exposure_var){ -->
 
-  for (i in exposure_var){
+<!--     main <- str_match(type, "(.*)_total")[,2] %>%  -->
+<!--       str_remove(., "_") -->
 
-    main <- str_match(type, "(.*)_total")[,2] %>%
-      str_remove(., "_")
+<!--     tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data, family = "binomial") %>% -->
+<!--             tbl_regression(exponentiate = TRUE,  -->
+<!--                            intercept = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>%  -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral")) -->
+<!--     print(tbl1) -->
 
-    tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site, 
-                data = data, family = "binomial") %>%
-            tbl_regression(exponentiate = TRUE,
-                           intercept = TRUE,
-                           label = list(`data[[i]]` ~ i)) %>%
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral"))
-    print(tbl2)
+<!--   } -->
+<!-- } -->
 
-  }
-}
-```
+<!-- loreg_table_per <- function(data, type){ -->
 
-#### CD3_total
+<!--   for (i in exposure_var){ -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r log reg intrab, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD3_total")
-```
-</div>
+<!--     main <- str_match(type, "(.*)_total")[,2] %>% -->
+<!--       str_remove(., "_") -->
 
-<div class = "col-md-6">
-```{r log reg periphb, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD3_total")
-```
-</div>
-</div>
+<!--     tbl2 <- glm(data[[paste0(type, ".p")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data, family = "binomial") %>% -->
+<!--             tbl_regression(exponentiate = TRUE, -->
+<!--                            intercept = TRUE, -->
+<!--                            label = list(`data[[i]]` ~ i)) %>% -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Peripheral")) -->
+<!--     print(tbl2) -->
 
-***
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
 
-#### CD3_CD8_total
+<!-- #### CD3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD3_CD8_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r log reg intrab, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD3_CD8_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r log reg periphb, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-#### CD3_FoxP3_total
+<!-- #### CD3_CD8_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD3_FoxP3_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD3_FoxP3_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-#### CD11b_total
+<!-- #### CD3_FoxP3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD11b_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD11b_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-#### CD11b_CD15_total
+<!-- #### CD11b_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-loreg_table_int(data = markers_wTMA, type = "CD11b_CD15_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_per(data = markers_wTMA, type = "CD11b_CD15_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-<br>
+<!-- *** -->
 
-***
-***
+<!-- #### CD11b_CD15_total -->
 
-<br>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- loreg_table_int(data = markers_wTMA_cases, type = "CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-### Immunoscore 3 cat 2018-lancet
-TMA cannot be included in the immunoscore categories aka take first values on ROI only.  
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_per(data = markers_wTMA_cases, type = "CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- <br> -->
+
+<!-- *** -->
+<!-- *** -->
+
+<!-- <br> -->
+
+<!-- ### Immunoscore 3 cat 2018-lancet -->
+<!-- TMA cannot be included in the immunoscore categories aka take first values on ROI only.   -->
 
 <!-- ```{r multi reg function d} -->
 <!-- multinom_pivot_wider <- function(x) { -->
@@ -4376,28 +4385,28 @@ TMA cannot be included in the immunoscore categories aka take first values on RO
 <!--   } -->
 <!-- } -->
 <!-- ``` -->
-<!-- <!-- Intratumoral --> -->
+<!-- Intratumoral -->
 
 <!-- <div class = "row"> -->
 <!-- <div class = "col-md-6"> -->
 <!-- ```{r, results = 'asis'} -->
 
-<!-- # model <- multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_wTMA) -->
+<!-- # model <- multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_wTMA_cases) -->
 <!-- # broom::tidy(model) -->
 <!-- # exp(coef(model)) -->
-<!-- # multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_wTMA) %>% -->
+<!-- # multinom(immunoscore_patients ~ BMI_recent_grp, data = markers_wTMA_cases) %>% -->
 <!-- #   tbl_regression(exponentiate = TRUE) %>% -->
 <!-- #   multinom_pivot_wider() -->
 
-<!-- # multireg_table_int(data = markers_wTMA) -->
+<!-- # multireg_table_int(data = markers_wTMA_cases) -->
 <!-- ``` -->
 <!-- </div> -->
 
-<!-- <!-- Peripheral  --> -->
+<!-- Peripheral  -->
 
 <!-- <div class = "col-md-6"> -->
 <!-- ```{r, results = 'asis'} -->
-<!-- # multireg_table_per(data = markers_wTMA) -->
+<!-- # multireg_table_per(data = markers_wTMA_cases) -->
 <!-- ``` -->
 <!-- </div> -->
 <!-- </div> -->
@@ -4405,7 +4414,7 @@ TMA cannot be included in the immunoscore categories aka take first values on RO
 <!-- What are the weight? -->
 <!-- ```{r} -->
 <!-- multinom(immunoscore_2018lancet_patients ~ immunoscore_2018lancet_patients + refage + site, -->
-<!--                      data = markers_wTMA) -->
+<!--                      data = markers_wTMA_cases) -->
 <!-- ``` -->
 
 <!-- ```{r multi reg} -->
@@ -4445,7 +4454,7 @@ TMA cannot be included in the immunoscore categories aka take first values on RO
 <!-- <div class = "row"> -->
 <!-- <div class = "col-md-6"> -->
 <!-- ```{r, results = 'asis'} -->
-<!-- multireg_table_int(data = markers_wTMA) -->
+<!-- multireg_table_int(data = markers_wTMA_cases) -->
 <!-- ``` -->
 <!-- </div> -->
 
@@ -4453,128 +4462,128 @@ TMA cannot be included in the immunoscore categories aka take first values on RO
 
 <!-- <div class = "col-md-6"> -->
 <!-- ```{r, results = 'asis'} -->
-<!-- multireg_table_per(data = markers_wTMA) -->
+<!-- multireg_table_per(data = markers_wTMA_cases) -->
 <!-- ``` -->
 <!-- </div> -->
 <!-- </div> -->
 
-<br>
+<!-- <br> -->
 
-***
-***
+<!-- *** -->
+<!-- *** -->
 
-<br>
-<br>
+<!-- <br> -->
+<!-- <br> -->
 
-# 3b. Logistic regression on Continuous variables adjusted by age + site
+<!-- # 3b. Logistic regression on Continuous variables adjusted by age + site -->
 
-```{r glm function d}
-glm_table_int <- function(data, type){
-  
-  for (i in exposure_var){
-    
-    main <- str_match(type, "(.*)_total")[,2] %>% 
-      str_replace(., "_", " ")
-    
-    tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site, 
-                data = data) %>%
-            tbl_regression(exponentiate = TRUE, 
-                           label = list(`data[[i]]` ~ i)) %>% 
-            modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral"))
-    print(tbl1)
-    
-  }
-}
-```
+<!-- ```{r glm function d} -->
+<!-- glm_table_int <- function(data, type){ -->
 
-## CD3_total
+<!--   for (i in exposure_var){ -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r glm intra d, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD3_total")
-```
-</div>
+<!--     main <- str_match(type, "(.*)_total")[,2] %>%  -->
+<!--       str_replace(., "_", " ") -->
 
-<div class = "col-md-6">
-```{r glm periph d, results = 'asis'}
-# glm_table_(data = markers_wTMA, type = "percent_CD3_total")
-```
-</div>
-</div>
+<!--     tbl1 <- glm(data[[paste0(type, ".i")]] ~ data[[i]] + refage + site,  -->
+<!--                 data = data) %>% -->
+<!--             tbl_regression(exponentiate = TRUE,  -->
+<!--                            label = list(`data[[i]]` ~ i)) %>%  -->
+<!--             modify_spanning_header(everything() ~ paste("Association with Overall", main, "Intratumoral")) -->
+<!--     print(tbl1) -->
 
-***
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
 
-## CD3_CD8_total
+<!-- ## CD3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD3_CD8_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r glm intra d, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers_wTMA, type = "percent_CD3_CD8_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r glm periph d, results = 'asis'} -->
+<!-- # glm_table_(data = markers_wTMA_cases, type = "percent_CD3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-## CD3_FoxP3_total
+<!-- ## CD3_CD8_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD3_FoxP3_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers_wTMA, type = "percent_CD3_FoxP3_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_wTMA_cases, type = "percent_CD3_CD8_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-## CD11b_total
+<!-- ## CD3_FoxP3_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD11b_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# glm_table_(data = markers_wTMA, type = "percent_CD11b_total")
-```
-</div>
-</div>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_wTMA_cases, type = "percent_CD3_FoxP3_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
 
-***
+<!-- *** -->
 
-## CD11b_CD15_total
+<!-- ## CD11b_total -->
 
-<div class = "row">
-<div class = "col-md-6">
-```{r, results = 'asis'}
-glm_table_int(data = markers_wTMA, type = "percent_CD11b_CD15_total")
-```
-</div>
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
 
-<div class = "col-md-6">
-```{r, results = 'asis'}
-# loreg_table_(data = markers_wTMA, type = "percent_CD11b_CD15_total")
-```
-</div>
-</div>
-<br>
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # glm_table_(data = markers_wTMA_cases, type = "percent_CD11b_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+
+<!-- *** -->
+
+<!-- ## CD11b_CD15_total -->
+
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- glm_table_int(data = markers_wTMA_cases, type = "percent_CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r, results = 'asis'} -->
+<!-- # loreg_table_(data = markers_wTMA_cases, type = "percent_CD11b_CD15_total") -->
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
+<!-- <br> -->
 <br>
 
 ***
