@@ -169,9 +169,10 @@ clinical_OCWAA <- clinical_OCWAA %>%
   ) %>% 
   mutate(fullpregnum = case_when(
     pregever == 2                            ~ "no pregnancies",
-    fullpregnum <= 2                         ~ "1-2",
-    fullpregnum > 2                          ~ "3+"
-  )) %>% 
+    fullpregnum == 0                         ~ "no pregnancies",
+    fullpregnum > 0                          ~ "any full-term pregnancies"
+  ), fullpregnum = factor(fullpregnum, levels = c("no pregnancies",
+                                                "any full-term pregnancies"))) %>% 
   mutate(ocdur = case_when(
     ocever == 2                              ~ "never user",
     ocdur <= 5                               ~ ">0-5 years",
